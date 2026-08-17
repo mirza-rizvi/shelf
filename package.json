@@ -46,7 +46,7 @@
     "@wxt-dev/module-react": "1.2.2",
     "jsdom": "27.2.0",
     "playwright-core": "^1.62.1",
-    "typescript": "~5.9.0",
+    "typescript": "~7.0.2",
     "vitest": "4.1.10",
     "wxt": "0.21.3"
   },
