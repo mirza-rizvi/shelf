@@ -1,0 +1,50 @@
+# Dependencies and generated extension output
+node_modules/
+.wxt/
+.output/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Packaged extensions and source maps
+*.zip
+*.crx
+*.pem
+*.map
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.cache/
+.tmp/
+tmp/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+*.crt
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local AI/agent tools and generated context
+AGENTS.md
+CLAUDE.md
+.agents/
+.codex/
+.claude/
+.cursor/
+.aider*
+graphify-out/
+repomix-output.*

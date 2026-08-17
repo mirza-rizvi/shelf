@@ -1,0 +1,56 @@
+{
+  "name": "shelf",
+  "description": "Privacy-first tab manager. Save tabs to a local list, restore them later. Zero network, zero accounts.",
+  "private": true,
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mirza-rizvi/shelf.git"
+  },
+  "homepage": "https://github.com/mirza-rizvi/shelf#readme",
+  "bugs": {
+    "url": "https://github.com/mirza-rizvi/shelf/issues"
+  },
+  "keywords": [
+    "browser-extension",
+    "chrome-extension",
+    "manifest-v3",
+    "privacy",
+    "tab-manager"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run compile && npm test && npm run build",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "preact": "^10.29.8",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.2",
+    "@types/chrome": "^0.2.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@wxt-dev/module-react": "1.2.2",
+    "jsdom": "30.0.1",
+    "playwright-core": "^1.62.1",
+    "typescript": "~5.9.0",
+    "vitest": "4.1.10",
+    "wxt": "0.21.3"
+  },
+  "overrides": {
+    "nanoid": "3.3.18"
+  }
+}

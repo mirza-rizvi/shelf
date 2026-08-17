@@ -1,0 +1,51 @@
+body {
+  width: 340px;
+  min-height: 200px;
+}
+
+.popup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.popup-header h1 {
+  font-size: 15px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.popup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popup-actions .btn {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.popup-more summary { cursor: pointer; color: var(--text-muted); font-size: 12.5px; margin-bottom: 8px; }
+.popup-more .popup-actions { margin-bottom: 9px; }
+.popup-field { display: grid; gap: 3px; margin-top: 7px; color: var(--text-muted); font-size: 12px; }
+.popup-field select { width: 100%; min-width: 0; padding: 5px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.popup-check { display: flex; gap: 7px; align-items: center; font-size: 12.5px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 9px; }
+
+.popup-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 9px;
+}
