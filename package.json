@@ -36,13 +36,13 @@
   "dependencies": {
     "preact": "^10.29.8",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@testing-library/react": "16.3.2",
     "@types/chrome": "^0.2.5",
     "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
+    "@types/react-dom": "^19.2.4",
     "@wxt-dev/module-react": "1.2.2",
     "jsdom": "27.2.0",
     "playwright-core": "^1.62.1",
