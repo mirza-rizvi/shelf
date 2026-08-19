@@ -3,26 +3,19 @@ import type {
   Meta,
   SavedGroup,
   Settings,
-  TrashBatch,
   TrashEntry,
-  Workspace,
-  WorkspaceIndex,
 } from '../types';
-import { CURRENT_SCHEMA_VERSION, INBOX_WORKSPACE_ID } from '../types';
+import { CURRENT_SCHEMA_VERSION } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
 import {
   KEY_INDEX,
   KEY_META,
   KEY_SETTINGS,
   KEY_TRASH_INDEX,
-  KEY_TRASH_BATCH_INDEX,
-  KEY_WORKSPACE_INDEX,
   groupKey,
   isGroupKey,
   idFromGroupKey,
   trashKey,
-  trashBatchKey,
-  workspaceKey,
 } from './keys';
 import { runMigrations } from './migrations';
 
@@ -212,16 +205,6 @@ export function addGroupsToIndex(
   });
 }
 
-export function reorderGroups(groupOrder: string[]): Promise<void> {
-  return enqueueIndexWrite(async () => {
-    const current = await getIndex();
-    const existing = await getGroups(current.groupOrder);
-    const requested = groupOrder.filter((id) => existing.has(id));
-    const omitted = current.groupOrder.filter((id) => existing.has(id) && !requested.includes(id));
-    await setIndex({ ...current, groupOrder: [...requested, ...omitted] });
-  });
-}
-
 /** Index-first delete; shard removal after. */
 export function deleteGroup(id: string): Promise<void> {
   return enqueueIndexWrite(async () => {
@@ -258,111 +241,6 @@ export async function collectOrphanGroupKeys(): Promise<string[]> {
 
 export async function removeKeys(keys: string[]): Promise<void> {
   if (keys.length > 0) await local().remove(keys);
-}
-
-// ---------- workspaces ----------
-
-let workspaceQueue: Promise<unknown> = Promise.resolve();
-function enqueueWorkspaceWrite<T>(fn: () => Promise<T>): Promise<T> {
-  const next = workspaceQueue.then(fn, fn);
-  workspaceQueue = next.catch(() => {});
-  return next;
-}
-
-export async function getWorkspaceIndex(): Promise<WorkspaceIndex> {
-  const res = await local().get(KEY_WORKSPACE_INDEX);
-  return (
-    (res[KEY_WORKSPACE_INDEX] as WorkspaceIndex | undefined) ?? {
-      workspaceOrder: [INBOX_WORKSPACE_ID],
-      updatedAt: 0,
-    }
-  );
-}
-
-export async function getWorkspace(id: string): Promise<Workspace | null> {
-  const key = workspaceKey(id);
-  const res = await local().get(key);
-  return (res[key] as Workspace | undefined) ?? null;
-}
-
-export async function getWorkspaces(): Promise<Workspace[]> {
-  const idx = await getWorkspaceIndex();
-  const ids = idx.workspaceOrder.includes(INBOX_WORKSPACE_ID)
-    ? idx.workspaceOrder
-    : [INBOX_WORKSPACE_ID, ...idx.workspaceOrder];
-  const res = await local().get(ids.map(workspaceKey));
-  const now = Date.now();
-  return ids
-    .map((id) => res[workspaceKey(id)] as Workspace | undefined)
-    .filter((workspace): workspace is Workspace => Boolean(workspace))
-    .concat(
-      res[workspaceKey(INBOX_WORKSPACE_ID)]
-        ? []
-        : [{ id: INBOX_WORKSPACE_ID, name: 'Inbox', createdAt: now, updatedAt: now }],
-    );
-}
-
-export function createWorkspace(name: string): Promise<Workspace> {
-  return enqueueWorkspaceWrite(async () => {
-    const clean = name.trim().slice(0, 128);
-    if (!clean) throw new Error('Workspace name is required');
-    const workspaces = await getWorkspaces();
-    if (workspaces.some((w) => w.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) {
-      throw new Error('A workspace with that name already exists');
-    }
-    const now = Date.now();
-    const workspace: Workspace = { id: crypto.randomUUID(), name: clean, createdAt: now, updatedAt: now };
-    const idx = await getWorkspaceIndex();
-    await local().set({
-      [workspaceKey(workspace.id)]: workspace,
-      [KEY_WORKSPACE_INDEX]: {
-        workspaceOrder: [...idx.workspaceOrder, workspace.id],
-        updatedAt: now,
-      } satisfies WorkspaceIndex,
-    });
-    return workspace;
-  });
-}
-
-export function renameWorkspace(id: string, name: string): Promise<void> {
-  return enqueueWorkspaceWrite(async () => {
-    const clean = name.trim().slice(0, 128);
-    if (!clean) throw new Error('Workspace name is required');
-    const [workspace, workspaces] = await Promise.all([getWorkspace(id), getWorkspaces()]);
-    if (!workspace) throw new Error('Workspace not found');
-    if (workspaces.some((w) => w.id !== id && w.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) {
-      throw new Error('A workspace with that name already exists');
-    }
-    await local().set({ [workspaceKey(id)]: { ...workspace, name: clean, updatedAt: Date.now() } });
-  });
-}
-
-export function deleteWorkspaceRecord(id: string): Promise<void> {
-  if (id === INBOX_WORKSPACE_ID) return Promise.reject(new Error('Inbox cannot be deleted'));
-  return enqueueWorkspaceWrite(async () => {
-    const idx = await getWorkspaceIndex();
-    await local().set({
-      [KEY_WORKSPACE_INDEX]: {
-        workspaceOrder: idx.workspaceOrder.filter((workspaceId) => workspaceId !== id),
-        updatedAt: Date.now(),
-      } satisfies WorkspaceIndex,
-    });
-    await local().remove(workspaceKey(id));
-  });
-}
-
-export async function putWorkspace(workspace: Workspace): Promise<void> {
-  await local().set({ [workspaceKey(workspace.id)]: workspace });
-}
-
-export function addWorkspaceToIndex(id: string): Promise<void> {
-  return enqueueWorkspaceWrite(async () => {
-    const idx = await getWorkspaceIndex();
-    if (idx.workspaceOrder.includes(id)) return;
-    await local().set({
-      [KEY_WORKSPACE_INDEX]: { workspaceOrder: [...idx.workspaceOrder, id], updatedAt: Date.now() } satisfies WorkspaceIndex,
-    });
-  });
 }
 
 // ---------- settings ----------
@@ -422,38 +300,6 @@ export async function deleteTrashEntry(id: string): Promise<void> {
   const idx = await getTrashIndex();
   await setTrashIndex({ order: idx.order.filter((t) => t !== id) });
   await local().remove(trashKey(id));
-}
-
-export async function putTrashBatch(batch: TrashBatch): Promise<void> {
-  const res = await local().get(KEY_TRASH_BATCH_INDEX);
-  const order = (res[KEY_TRASH_BATCH_INDEX] as { order: string[] } | undefined)?.order ?? [];
-  await local().set({
-    [trashBatchKey(batch.id)]: batch,
-    [KEY_TRASH_BATCH_INDEX]: { order: order.includes(batch.id) ? order : [batch.id, ...order] },
-  });
-}
-
-export async function getTrashBatch(id: string): Promise<TrashBatch | null> {
-  const key = trashBatchKey(id);
-  const res = await local().get(key);
-  return (res[key] as TrashBatch | undefined) ?? null;
-}
-
-export async function getTrashBatches(): Promise<TrashBatch[]> {
-  const res = await local().get(KEY_TRASH_BATCH_INDEX);
-  const order = (res[KEY_TRASH_BATCH_INDEX] as { order: string[] } | undefined)?.order ?? [];
-  if (order.length === 0) return [];
-  const values = await local().get(order.map(trashBatchKey));
-  return order
-    .map((id) => values[trashBatchKey(id)] as TrashBatch | undefined)
-    .filter((batch): batch is TrashBatch => Boolean(batch));
-}
-
-export async function deleteTrashBatch(id: string): Promise<void> {
-  const res = await local().get(KEY_TRASH_BATCH_INDEX);
-  const order = (res[KEY_TRASH_BATCH_INDEX] as { order: string[] } | undefined)?.order ?? [];
-  await local().set({ [KEY_TRASH_BATCH_INDEX]: { order: order.filter((batchId) => batchId !== id) } });
-  await local().remove(trashBatchKey(id));
 }
 
 // ---------- diagnostics ----------

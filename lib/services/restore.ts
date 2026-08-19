@@ -1,7 +1,6 @@
 import type { RestoreResult, SavedGroup, TabItem } from '../types';
 import { TABS_CREATE_CHUNK } from '../constants';
 import { isDangerous, isRestorable } from '../urls';
-import * as repo from '../storage/repo';
 import * as trash from './trash';
 
 /**
@@ -146,18 +145,4 @@ export async function restoreGroup(
   }
 
   return result;
-}
-
-/** Restore every group sequentially (chunked inside), in shelf-list order
- * (newest shelf first). */
-export async function restoreAll(opts: RestoreGroupOptions): Promise<RestoreResult> {
-  await repo.ensureReady();
-  const groups = await repo.getAllGroups();
-  const total: RestoreResult = { restored: 0, skipped: [] };
-  for (const group of groups) {
-    const r = await restoreGroup(group, opts);
-    total.restored += r.restored;
-    total.skipped.push(...r.skipped);
-  }
-  return total;
 }

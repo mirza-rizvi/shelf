@@ -4,21 +4,19 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-0f766e.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4.svg)](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3)
 
-Shelf is a privacy-first tab manager for Chrome and Chromium browsers. Save open tabs into local workspaces and sessions, close them only after a verified write, and restore them later without an account, cloud service, analytics, or tracking.
-
-![Shelf manager in light mode](store-assets/1-manager-light.png)
+Shelf is a privacy-first tab manager for Chrome and Chromium browsers. Save open tabs into local sessions, close them only after a verified write, and restore them later without an account, cloud service, analytics, or tracking.
 
 ## Why Shelf
 
 - Save one tab, highlighted tabs, a tab group, a window, or every window.
 - Save without closing, or close tabs only after the saved data is verified.
-- Organize tabs into workspaces and sessions with search, sorting, filtering, multi-select, and drag-and-drop.
-- Restore individual tabs, selections, or sessions while keeping the saved copy by default.
+- Find saved tabs with one fast search across session names, titles, and URLs.
+- Restore individual tabs or whole sessions while keeping the saved copy by default.
 - Detect and recoverably remove duplicate URLs.
 - Preserve Chrome tab-group names, colors, order, and pinned state.
-- Undo deletions through a local 30-day trash and export versioned JSON or plain text backups.
+- Undo deletions through a local 30-day trash and export versioned JSON backups.
 - Import OneTab URL exports.
-- Use comfortable or compact rows, keyboard commands, context menus, dark mode, and an optional tab limit.
+- Use keyboard commands, context menus, dark mode, and an optional tab limit.
 
 Shelf stores data in `chrome.storage.local`. It makes no external requests and requests no host permissions. See the [privacy policy](docs/PRIVACY.md) and [threat model](docs/THREAT-MODEL.md) for the exact guarantees and limitations.
 
@@ -55,7 +53,7 @@ The implementation deliberately avoids extra infrastructure: no backend, account
 | Permission | Purpose |
 |---|---|
 | `tabs` | Read the URLs and titles of tabs the user explicitly saves, close saved tabs, and restore them. |
-| `storage`, `unlimitedStorage` | Store saved sessions, workspaces, trash, and settings locally without the default quota. |
+| `storage`, `unlimitedStorage` | Store saved sessions, trash, and settings locally without the default quota. |
 | `tabGroups` | Preserve and recreate native Chrome tab groups. |
 | `alarms` | Run trash cleanup, orphan cleanup, and optional tab-limit checks without a persistent background page. |
 | `favicon` | Display icons from Chrome's local favicon cache without contacting websites or an icon service. |

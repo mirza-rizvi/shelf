@@ -8,9 +8,6 @@ export const DEFAULT_SETTINGS: Settings = {
   captureClosesTabs: true,
   skipDuplicatesOnSave: true,
   excludedDomains: [],
-  managerDensity: 'comfortable',
-  managerSessionSort: 'manual',
-  managerTabSort: 'manual',
   tabLimit: {
     enabled: false,
     maxTabs: 25,

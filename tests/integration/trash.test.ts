@@ -78,6 +78,25 @@ describe('trash service', () => {
     expect(await repo.getTrashEntries()).toHaveLength(2);
   });
 
+  it('trashAll moves every session into independently recoverable Trash entries', async () => {
+    await seed('g1', 2);
+    await seed('g2', 1);
+
+    expect(await trash.trashAll()).toBe(2);
+    expect(await repo.getAllGroups()).toHaveLength(0);
+    const entries = await repo.getTrashEntries();
+    expect(entries).toHaveLength(2);
+
+    for (const entry of entries) expect(await trash.restoreFromTrash(entry.id)).toBe(true);
+    expect((await repo.getAllGroups()).map((group) => group.id).sort()).toEqual(['g1', 'g2']);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
+  });
+
+  it('trashAll is a safe no-op when the shelf is empty', async () => {
+    expect(await trash.trashAll()).toBe(0);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
+  });
+
   it('purgeExpired drops only entries older than retention', async () => {
     await seed('g1');
     await seed('g2');

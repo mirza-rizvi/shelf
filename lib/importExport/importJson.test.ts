@@ -39,6 +39,26 @@ describe('parseJsonImport', () => {
     expect(r.groups).toHaveLength(1);
   });
 
+  it('flattens workspace-aware v3 backups without dropping sessions or tabs', () => {
+    const legacy = JSON.stringify({
+      format: 'shelf-export',
+      schemaVersion: 3,
+      workspaces: [{ id: 'work', name: 'Work' }],
+      groups: [{ ...validGroup, workspaceId: 'work' }],
+    });
+    const result = parseJsonImport(legacy);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]!.tabs).toHaveLength(2);
+    expect('workspaceId' in result.groups[0]!).toBe(false);
+    expect('workspaces' in result).toBe(false);
+  });
+
+  it('exports the flat v4 format without workspace metadata', () => {
+    const exported = JSON.parse(buildJsonExport([validGroup])) as Record<string, unknown>;
+    expect(exported['schemaVersion']).toBe(4);
+    expect(exported['workspaces']).toBeUndefined();
+  });
+
   it('rejects non-JSON and wrong shapes with errors, never throws', () => {
     expect(parseJsonImport('{{{').errors.length).toBeGreaterThan(0);
     expect(parseJsonImport('"a string"').errors.length).toBeGreaterThan(0);

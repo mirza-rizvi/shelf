@@ -8,11 +8,11 @@ Chrome MV3 extension. WXT + TypeScript + Vite, with React-compatible source comp
 entrypoints/
   background.ts        # service worker — ALL mutations happen here
   popup/               # primary + advanced capture scopes and destinations
-  manager/             # full-page UI (hash routes: #/ #/settings #/trash #/help)
+  manager/             # full-page UI (hash routes: #/ #/settings #/trash)
 components/            # shared React (GroupCard, Toast, Favicon, hooks)
 lib/
   types.ts             # data model + CURRENT_SCHEMA_VERSION
-  urls|search|listView|eviction|duplicates.ts # PURE logic — no chrome.*, unit-tested
+  urls|search|eviction|duplicates.ts # PURE logic — no chrome.*, unit-tested
   storage/keys.ts      # storage key layout
   storage/repo.ts      # sharded read/write, write-verify, index invariants
   storage/migrations/  # versioned, resumable migration runner
@@ -30,17 +30,15 @@ lib/
 | `meta` | `{ schemaVersion, installedAt }` |
 | `index` | `{ groupOrder: string[], updatedAt }` — display order |
 | `group:<uuid>` | one `SavedGroup` shard per saved list |
-| `workspaceIndex`, `workspace:<uuid>` | local Workspace → Session organization |
 | `settings` | `Settings` (deep-merged over defaults on read) |
 | `trashIndex`, `trash:<uuid>` | trash entries (sharded like groups) |
-| `trashBatchIndex`, `trashBatch:<uuid>` | recovery metadata for bulk/workspace deletion |
 | `op:<uuid>` | in-flight operation journal (crash recovery) |
 
 `chrome.storage.session` (ephemeral, safe to lose): tab first-seen times, tab-limit latch, startup timestamp.
 
-**Sharding rationale:** one key per group means saves/renames/deletes rewrite only that shard plus the small index — never the whole dataset. `storage.onChanged` diffs stay cheap; UI refresh is coalesced.
+**Sharding rationale:** one key per group means saves and deletes rewrite only that shard plus the small index — never the whole dataset. `storage.onChanged` diffs stay cheap; UI refresh is coalesced.
 
-**List derivation:** workspace selection, text search, exact-hostname filtering, and view-only sorting run through the pure `listView` pipeline. Non-manual sorts never mutate persisted order; native drag reorder is enabled only in Manual mode. View density and sort choices use the existing settings shard, while filters, selection, and collapse state remain ephemeral.
+**List derivation:** the manager preserves stored session/tab order and applies only text search through the pure `search` module. Collapse state is ephemeral. The page deliberately has no workspace, filter, sorting, density, bulk-selection, or drag state.
 
 Shelf deliberately retains sharded `chrome.storage.local` instead of adding IndexedDB/Dexie. The current data shape is naturally document-sharded, storage is background-safe and transactional per `set()`, and this avoids a second persistence layer plus runtime dependency. Large lists are bounded with offscreen rendering and per-session row caps.
 
@@ -102,6 +100,8 @@ Scheme allowlist (`http`, `https`, `file`, `about`, `chrome`); `javascript:`/`da
 ## Migrations
 
 `meta.schemaVersion` gates everything. Fresh installs seed the current version. Upgrades run step-by-step and commit the version only after each transform, so a service-worker stop can safely resume. Newer-than-current data (a downgrade) is left untouched. `repo.ensureReady()` is called defensively from every context, so a missed `onInstalled` cannot strand data.
+
+Schema v4 removed the short-lived workspace and view-preference layers. Its migration strips only workspace references, verifies every live and trashed group by id/tab-count/checksum, and then removes obsolete workspace/batch keys. Older workspace-aware JSON backups remain importable as flat sessions.
 
 ## Dependency justification
 

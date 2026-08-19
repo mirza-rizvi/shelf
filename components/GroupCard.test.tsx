@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import type { SavedGroup } from '../lib/types';
@@ -85,34 +85,20 @@ describe('GroupCard rendering', () => {
     expect(document.querySelectorAll('.tab-row')).toHaveLength(0);
   });
 
-  it('shows full URLs in comfortable mode and omits them in compact mode', () => {
+  it('uses one fixed row layout with the full URL available on hover', () => {
     const group = makeGroup(['https://example.com/full/path']);
-    const { rerender } = render(<GroupCard group={group} density="comfortable" />);
-    expect(document.querySelector('.tab-url')?.textContent).toBe('https://example.com/full/path');
-    rerender(<GroupCard group={group} density="compact" />);
+    render(<GroupCard group={group} />);
     expect(document.querySelector('.tab-url')).toBeNull();
+    expect(document.querySelector('.tab-info')?.getAttribute('title')).toBe('https://example.com/full/path');
   });
 
-  it('selects only the visible rows from the session checkbox', () => {
-    const group = makeGroup(['https://a.com/', 'https://b.com/']);
-    const onToggleVisible = vi.fn();
-    render(<GroupCard group={group} tabs={[group.tabs[1]!]} onToggleVisible={onToggleVisible} />);
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Select visible tabs in Shelf one' }));
-    expect(onToggleVisible).toHaveBeenCalledWith(true);
-  });
-
-  it('marks the session checkbox indeterminate for a partial selection', () => {
-    const group = makeGroup(['https://a.com/', 'https://b.com/']);
-    render(<GroupCard group={group} selectedTabIds={new Set(['t0'])} />);
-    const checkbox = screen.getByRole('checkbox', { name: 'Select visible tabs in Shelf one' }) as HTMLInputElement;
-    expect(checkbox.indeterminate).toBe(true);
-  });
-
-  it('exposes secondary actions in the session menu and disables drag while sorted', () => {
-    render(<GroupCard group={makeGroup(['https://a.com/'])} canReorderSession={false} tabSort="title" />);
-    expect(screen.getByRole('button', { name: 'More actions for Shelf one' })).toBeDefined();
-    expect(screen.getByText('Copy URLs + titles')).toBeDefined();
-    expect(document.querySelector('.group-card')?.getAttribute('draggable')).toBe('false');
-    expect(document.querySelector('.tab-row')?.getAttribute('draggable')).toBe('false');
+  it('shows only restore and recoverable delete actions, with no selection or drag UI', () => {
+    render(<GroupCard group={makeGroup(['https://a.com/'])} />);
+    expect(screen.getAllByRole('button', { name: 'Restore' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(2);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /More actions/ })).toBeNull();
+    expect(document.querySelector('.group-card')?.hasAttribute('draggable')).toBe(false);
+    expect(document.querySelector('.tab-row')?.hasAttribute('draggable')).toBe(false);
   });
 });

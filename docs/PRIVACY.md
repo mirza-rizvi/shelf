@@ -1,6 +1,6 @@
 # Shelf Privacy Policy
 
-_Last updated: 2026-08-18. This policy describes what Shelf actually does in code; the source is open for verification._
+_Last updated: 2026-08-19. This policy describes what Shelf actually does in code; the source is open for verification._
 
 ## The short version
 
@@ -8,7 +8,7 @@ Shelf stores everything on your device and sends nothing anywhere. There is no s
 
 ## What Shelf stores, and where
 
-When you save tabs, Shelf stores their **URL, page title, pinned state, tab-group name/color/collapsed state, workspace/session organization, and the time you saved them** in your browser's local extension storage (`chrome.storage.local`) on your device. Your settings and trash contents are stored the same way.
+When you save tabs, Shelf stores their **URL, page title, pinned state, tab-group name/color/collapsed state, session organization, and the time you saved them** in your browser's local extension storage (`chrome.storage.local`) on your device. Your settings and trash contents are stored the same way.
 
 This data:
 
@@ -44,7 +44,7 @@ Shelf requests **no host permissions** and injects **no content scripts** — it
 
 ## Data you export
 
-Export files (JSON or text) are created locally and saved wherever you choose. They are your responsibility to store safely; they contain your saved URLs and titles in plain text.
+JSON export files are created locally and saved wherever you choose. They are your responsibility to store safely; they contain your saved URLs and titles in plain text.
 
 ## Changes
 

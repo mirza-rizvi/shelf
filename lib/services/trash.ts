@@ -8,7 +8,7 @@ import * as repo from '../storage/repo';
  */
 
 /** Move a whole saved group to trash. Returns the trash entry id (for undo). */
-export async function trashGroup(groupId: string, batchId?: string): Promise<string | null> {
+export async function trashGroup(groupId: string): Promise<string | null> {
   const group = await repo.getGroup(groupId);
   if (!group) return null;
   const entry: TrashEntry = {
@@ -16,7 +16,6 @@ export async function trashGroup(groupId: string, batchId?: string): Promise<str
     deletedAt: Date.now(),
     kind: 'group',
     group,
-    ...(batchId ? { batchId } : {}),
   };
   // Trash shard first (data preserved), then remove from live set.
   await repo.putTrashEntry(entry);
@@ -48,19 +47,21 @@ export async function trashTab(groupId: string, tabId: string): Promise<string |
   return entry.id;
 }
 
+/** Move every live session to Trash. Each session remains independently recoverable. */
+export async function trashAll(): Promise<number> {
+  const groups = await repo.getAllGroups();
+  let trashed = 0;
+  for (const group of groups) {
+    if (await trashGroup(group.id)) trashed += 1;
+  }
+  return trashed;
+}
+
 /** Restore a trash entry back onto the shelf. */
 export async function restoreFromTrash(entryId: string): Promise<boolean> {
   const entries = await repo.getTrashEntries();
   const entry = entries.find((e) => e.id === entryId);
   if (!entry) return false;
-
-  if (entry.batchId) {
-    const batch = await repo.getTrashBatch(entry.batchId);
-    if (batch?.workspace) {
-      await repo.putWorkspace(batch.workspace);
-      await repo.addWorkspaceToIndex(batch.workspace.id);
-    }
-  }
 
   const existing = await repo.getGroup(entry.group.id);
   if (existing) {
@@ -88,7 +89,6 @@ export async function purgeAll(): Promise<number> {
   for (const e of entries) {
     await repo.deleteTrashEntry(e.id);
   }
-  for (const batch of await repo.getTrashBatches()) await repo.deleteTrashBatch(batch.id);
   return entries.length;
 }
 
@@ -102,9 +102,6 @@ export async function purgeExpired(): Promise<number> {
       await repo.deleteTrashEntry(e.id);
       purged += 1;
     }
-  }
-  for (const batch of await repo.getTrashBatches()) {
-    if (batch.deletedAt < cutoff) await repo.deleteTrashBatch(batch.id);
   }
   return purged;
 }

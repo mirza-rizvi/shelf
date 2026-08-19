@@ -6,7 +6,6 @@ import type {
   TabItem,
 } from '../types';
 import { DUPLICATE_SAVE_WINDOW_MS, TABS_REMOVE_CHUNK } from '../constants';
-import { INBOX_WORKSPACE_ID } from '../types';
 import { canonicalUrl, matchesExcludedDomain } from '../duplicates';
 import * as repo from '../storage/repo';
 import * as journal from './journal';
@@ -33,7 +32,6 @@ export type CaptureScope =
 export interface CaptureOptions {
   closeOriginals: boolean;
   windowId?: number; // for scope 'window'; defaults to current window
-  workspaceId?: string;
   destinationGroupId?: string;
   allowDuplicates?: boolean;
 }
@@ -149,7 +147,7 @@ export async function captureTabs(
       windowKey = opts.windowId ?? 'cur';
     }
   }
-  const dupKey = `${scope}:${windowKey}:${opts.closeOriginals}:${opts.workspaceId ?? ''}:${opts.destinationGroupId ?? ''}`;
+  const dupKey = `${scope}:${windowKey}:${opts.closeOriginals}:${opts.destinationGroupId ?? ''}`;
   const now = Date.now();
   if (lastCapture && lastCapture.key === dupKey && now - lastCapture.at < DUPLICATE_SAVE_WINDOW_MS) {
     return { groupId: null, saved: 0, closed: 0, failures: 0 };
@@ -202,7 +200,6 @@ async function filterDuplicateCandidates(
 async function buildGroup(
   candidates: chrome.tabs.Tab[],
   scope: CaptureScope | 'tab-limit',
-  workspaceId: string,
 ): Promise<SavedGroup> {
   const nativeGroupIds = [...new Set(candidates.map((t) => t.groupId).filter((g) => g !== -1 && g !== undefined))] as number[];
   const chromeGroups: SavedChromeTabGroup[] = [];
@@ -229,7 +226,6 @@ async function buildGroup(
   }));
   const group: SavedGroup = {
     id: crypto.randomUUID(),
-    workspaceId,
     name: formatGroupName(tabs.length, scope === 'tab-limit' ? 'window' : scope),
     createdAt: savedAt,
     updatedAt: savedAt,
@@ -273,7 +269,7 @@ async function saveWindowGroups(tabs: chrome.tabs.Tab[], opts: CaptureOptions): 
     skippedDuplicates += filtered.skipped;
     if (filtered.tabs.length === 0) continue;
     accepted.push(...filtered.tabs);
-    groups.push(await buildGroup(filtered.tabs, 'window', opts.workspaceId ?? INBOX_WORKSPACE_ID));
+    groups.push(await buildGroup(filtered.tabs, 'window'));
   }
   if (groups.length === 0) return { groupId: null, groupIds: [], saved: 0, closed: 0, failures: 0, skippedDuplicates };
   const opId = crypto.randomUUID();
@@ -318,7 +314,7 @@ export async function saveTabList(
   if (candidates.length === 0) {
     return { groupId: destination?.id ?? null, saved: 0, closed: 0, failures: 0, skippedDuplicates: filtered.skipped };
   }
-  const captured = await buildGroup(candidates, scope, opts.workspaceId ?? destination?.workspaceId ?? INBOX_WORKSPACE_ID);
+  const captured = await buildGroup(candidates, scope);
   const group: SavedGroup = destination
     ? {
         ...destination,

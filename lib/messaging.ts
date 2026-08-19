@@ -18,37 +18,18 @@ export type Command =
       cmd: 'capture';
       scope: CaptureScope;
       closeOriginals?: boolean;
-      workspaceId?: string;
       destinationGroupId?: string;
       allowDuplicates?: boolean;
     }
   | { cmd: 'restoreTab'; groupId: string; tabId: string }
   | { cmd: 'restoreGroup'; groupId: string; removeAfter: boolean }
-  | { cmd: 'restoreSelected'; items: { groupId: string; tabId: string }[]; removeAfter: boolean }
-  | { cmd: 'restoreAll' }
   | { cmd: 'trashGroup'; groupId: string }
   | { cmd: 'trashTab'; groupId: string; tabId: string }
   | { cmd: 'trashAll' }
   | { cmd: 'emptyTrash' }
   | { cmd: 'undoTrash'; entryId: string }
   | { cmd: 'purgeTrash'; entryId: string }
-  | { cmd: 'renameGroup'; groupId: string; name: string }
-  | { cmd: 'duplicateGroup'; groupId: string }
-  | { cmd: 'moveGroup'; groupId: string; workspaceId: string }
-  | { cmd: 'reorderGroups'; groupIds: string[] }
-  | { cmd: 'reorderTabs'; groupId: string; tabIds: string[] }
-  | {
-      cmd: 'moveTabs';
-      items: { groupId: string; tabId: string }[];
-      destinationGroupId?: string;
-      workspaceId?: string;
-    }
-  | { cmd: 'trashSelected'; items: { groupId: string; tabId: string }[] }
-  | { cmd: 'removeDuplicates'; groupIds?: string[]; keep: 'newest' | 'oldest' }
-  | { cmd: 'createWorkspace'; name: string }
-  | { cmd: 'renameWorkspace'; workspaceId: string; name: string }
-  | { cmd: 'deleteWorkspace'; workspaceId: string }
-  | { cmd: 'undoWorkspace'; batchId: string }
+  | { cmd: 'removeDuplicates'; keep: 'newest' | 'oldest' }
   | { cmd: 'saveSettings'; settings: SettingsPatch }
   | { cmd: 'markExported' }
   | { cmd: 'importGroups'; json: string }
@@ -60,12 +41,9 @@ export type CommandResult =
       capture?: CaptureResult;
       restore?: RestoreResult;
       trashEntryId?: string | null;
-      workspaceId?: string;
-      groupId?: string;
-      imported?: number;
-      moved?: number;
-      removed?: number;
       trashed?: number;
+      imported?: number;
+      removed?: number;
       purged?: number;
     }
   | { ok: false; error: string };

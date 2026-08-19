@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { LoadError } from '../../../components/LoadError';
 import { useToast } from '../../../components/Toast';
 import type { ShelfData } from '../../../components/useStorageData';
 import type { Settings } from '../../../lib/types';
 import { TRASH_RETENTION_DAYS } from '../../../lib/constants';
+import { buildJsonExport } from '../../../lib/importExport/exportJson';
 import type { SettingsPatch } from '../../../lib/messaging';
 import { sendCmd } from '../../../lib/messaging';
 
@@ -65,8 +66,9 @@ function ExcludedDomainsField({ value, save }: { value: string[]; save: (patch: 
 }
 
 export function SettingsPage({ data }: { data: ShelfData }) {
-  const { settings, loading } = data;
+  const { groups, settings, loading } = data;
   const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (data.loadError) return <LoadError retry={data.refresh} />;
   if (loading) return <div aria-busy="true" />;
@@ -77,6 +79,28 @@ export function SettingsPage({ data }: { data: ShelfData }) {
     void sendCmd({ cmd: 'saveSettings', settings: patch }).then((res) => {
       if (!res.ok) toast.show(res.error);
     });
+  };
+
+  const exportBackup = () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const url = URL.createObjectURL(new Blob([buildJsonExport(groups, settings)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `shelf-backup-${date}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    void sendCmd({ cmd: 'markExported' });
+    toast.show('Shelf backup exported.');
+  };
+
+  const importFile = (file: File) => {
+    file.text().then((text) => {
+      const isJson = file.name.toLocaleLowerCase().endsWith('.json') || text.trimStart().startsWith('{') || text.trimStart().startsWith('[');
+      return sendCmd(isJson ? { cmd: 'importGroups', json: text } : { cmd: 'importOneTab', text });
+    }).then((result) => {
+      if (result.ok) toast.show(`Imported ${result.imported ?? 0} session${result.imported === 1 ? '' : 's'}.`);
+      else toast.show(`Import failed: ${result.error}`);
+    }).catch(() => toast.show('Could not read that file.'));
   };
 
   return (
@@ -186,6 +210,37 @@ export function SettingsPage({ data }: { data: ShelfData }) {
         {settings.tabLimit.enabled ? <MaxTabsField key={settings.tabLimit.maxTabs} value={settings.tabLimit.maxTabs} save={save} /> : null}
       </section>
 
+      <section aria-labelledby="s-data">
+        <h2 id="s-data">Data</h2>
+        <p className="field-hint">
+          Backups are created locally and contain your saved URLs and titles in plain text.
+        </p>
+        <div className="settings-actions">
+          <button className="btn" onClick={exportBackup}>Export backup</button>
+          <button className="btn-ghost" onClick={() => fileInputRef.current?.click()}>
+            Import backup or OneTab file
+          </button>
+          <button className="btn-ghost" onClick={() => {
+            if (!confirm('Move duplicate URLs to Trash? The oldest saved copy will be kept.')) return;
+            void sendCmd({ cmd: 'removeDuplicates', keep: 'oldest' }).then((result) => {
+              if (result.ok) toast.show(`Moved ${result.removed ?? 0} duplicate tabs to Trash.`);
+              else toast.show(result.error);
+            });
+          }}>Remove duplicate URLs…</button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,.txt,text/plain,application/json"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) importFile(file);
+            event.target.value = '';
+          }}
+        />
+      </section>
+
       <section aria-labelledby="s-privacy">
         <h2 id="s-privacy">Privacy</h2>
         <p className="field-hint">
@@ -195,6 +250,19 @@ export function SettingsPage({ data }: { data: ShelfData }) {
         </p>
         <p className="field-hint">
           Last full export: {settings.lastExportAt ? new Date(settings.lastExportAt).toLocaleString() : 'Never'}.
+        </p>
+      </section>
+
+      <section aria-labelledby="s-help">
+        <h2 id="s-help">Help</h2>
+        <p className="field-hint">
+          Use the Shelf toolbar button to save a tab, part of a window, or a whole window. Shelf verifies the local write before closing anything.
+        </p>
+        <p className="field-hint">
+          Restore one tab or a whole session from Shelves. Deleted sessions and tabs remain recoverable in Trash for {TRASH_RETENTION_DAYS} days.
+        </p>
+        <p className="field-hint">
+          Shelf keeps one pinned manager tab available. It uses no account, cloud service, analytics, or external network requests.
         </p>
       </section>
     </div>

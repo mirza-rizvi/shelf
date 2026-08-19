@@ -13,7 +13,7 @@ Save open tabs to a private local list and restore them later. No accounts, no c
 
 Too many tabs? Put them on the Shelf.
 
-One click saves your open tabs into a tidy local list and closes them. Restore one tab, one shelf, or everything — whenever you want.
+One click saves your open tabs into a tidy local list and closes them. Restore one tab or one shelf whenever you want.
 
 WHY SHELF IS DIFFERENT
 
@@ -29,7 +29,7 @@ WHY SHELF IS DIFFERENT
 
 ⚖️ Optional tab limit. Set a maximum per window (say 25); Shelf quietly moves the oldest overflow tabs to your shelf — never your active tab, pinned tabs, tabs playing audio, or unloaded tabs.
 
-↪️ Switching from OneTab? Import your OneTab export in two clicks.
+↪️ Switching from OneTab? Import your OneTab export from Settings.
 
 Note: Shelf keeps a small pinned "Shelf" tab at the left of your tab strip (like OneTab's tab). That tab IS the extension — it re-pins itself and comes back if you close it (closing the window still closes the window), so your saved tabs are always one click away.
 

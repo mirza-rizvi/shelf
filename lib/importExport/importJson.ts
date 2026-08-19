@@ -1,5 +1,5 @@
-import type { SavedChromeTabGroup, SavedGroup, TabGroupColor, TabItem, Workspace } from '../types';
-import { CURRENT_SCHEMA_VERSION, INBOX_WORKSPACE_ID } from '../types';
+import type { SavedChromeTabGroup, SavedGroup, TabGroupColor, TabItem } from '../types';
+import { CURRENT_SCHEMA_VERSION } from '../types';
 import { MAX_TITLE_LENGTH, MAX_URL_LENGTH } from '../constants';
 import { isDangerous } from '../urls';
 
@@ -18,7 +18,6 @@ export interface JsonImportResult {
   groups: SavedGroup[];
   skipped: number;
   errors: string[];
-  workspaces: Workspace[];
 }
 
 const VALID_COLORS: ReadonlySet<string> = new Set([
@@ -66,7 +65,7 @@ function parseChromeGroup(raw: unknown): SavedChromeTabGroup | null {
 }
 
 export function parseJsonImport(json: string): JsonImportResult {
-  const result: JsonImportResult = { groups: [], workspaces: [], skipped: 0, errors: [] };
+  const result: JsonImportResult = { groups: [], skipped: 0, errors: [] };
 
   let parsed: unknown;
   try {
@@ -94,20 +93,6 @@ export function parseJsonImport(json: string): JsonImportResult {
     result.errors.push('This backup was made by a newer Shelf version. Update Shelf before importing it.');
     return result;
   }
-  const workspaceIdMap = new Map<string, string>();
-  if (Array.isArray(envelope?.['workspaces'])) {
-    for (const raw of envelope!['workspaces'] as unknown[]) {
-      if (typeof raw !== 'object' || raw === null) continue;
-      const item = raw as Record<string, unknown>;
-      const oldId = asString(item['id'], 128);
-      const name = asString(item['name'], 128)?.trim();
-      if (!oldId || !name || oldId === INBOX_WORKSPACE_ID) continue;
-      const id = crypto.randomUUID();
-      workspaceIdMap.set(oldId, id);
-      result.workspaces.push({ id, name, createdAt: Date.now(), updatedAt: Date.now() });
-    }
-  }
-
   const now = Date.now();
   for (const rawGroup of rawGroups as unknown[]) {
     if (typeof rawGroup !== 'object' || rawGroup === null) {
@@ -139,7 +124,6 @@ export function parseJsonImport(json: string): JsonImportResult {
       updatedAt: asFiniteNumber(o['updatedAt'], now),
       chromeGroups,
       tabs,
-      workspaceId: workspaceIdMap.get(asString(o['workspaceId'], 128) ?? '') ?? INBOX_WORKSPACE_ID,
     });
   }
   return result;

@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GroupIndex, SavedGroup, Settings, TrashBatch, TrashEntry, Workspace } from '../lib/types';
+import type { GroupIndex, SavedGroup, Settings, TrashEntry } from '../lib/types';
 import {
   KEY_INDEX,
   KEY_META,
   KEY_SETTINGS,
   KEY_TRASH_INDEX,
-  KEY_TRASH_BATCH_INDEX,
-  KEY_WORKSPACE_INDEX,
   idFromGroupKey,
   isGroupKey,
   isOpKey,
   isTrashKey,
-  isTrashBatchKey,
-  isWorkspaceKey,
 } from '../lib/storage/keys';
 import * as repo from '../lib/storage/repo';
 
@@ -32,8 +28,6 @@ export interface ShelfData {
   groups: SavedGroup[];
   settings: Settings;
   trash: TrashEntry[];
-  workspaces: Workspace[];
-  trashBatches: TrashBatch[];
   loading: boolean;
   /** Storage read failed — data is intact, the READ failed. UI must show an
    * error + retry, never an empty state (which reads as data loss). */
@@ -49,15 +43,12 @@ type Changes = Record<string, chrome.storage.StorageChange>;
 const isIgnorableKey = (k: string) => isOpKey(k) || k === KEY_META;
 
 const isKnownKey = (k: string) =>
-  k === KEY_INDEX || k === KEY_SETTINGS || k === KEY_TRASH_INDEX || k === KEY_TRASH_BATCH_INDEX || k === KEY_WORKSPACE_INDEX ||
-  isGroupKey(k) || isTrashKey(k) || isWorkspaceKey(k) || isTrashBatchKey(k);
+  k === KEY_INDEX || k === KEY_SETTINGS || k === KEY_TRASH_INDEX || isGroupKey(k) || isTrashKey(k);
 
 export function useStorageData(): ShelfData {
   const [groups, setGroups] = useState<SavedGroup[]>([]);
   const [settings, setSettingsState] = useState<Settings | null>(null);
   const [trash, setTrash] = useState<TrashEntry[]>([]);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [trashBatches, setTrashBatches] = useState<TrashBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -75,18 +66,14 @@ export function useStorageData(): ShelfData {
   const refresh = useCallback(() => {
     void (async () => {
       await repo.ensureReady();
-      const [g, s, t, w, b] = await Promise.all([
+      const [g, s, t] = await Promise.all([
         repo.getAllGroups(),
         repo.getSettings(),
         repo.getTrashEntries(),
-        repo.getWorkspaces(),
-        repo.getTrashBatches(),
       ]);
       applyGroups(g);
       setSettingsState(s);
       setTrash(t);
-      setWorkspaces(w);
-      setTrashBatches(b);
       setLoadError(false);
       setLoading(false);
       readyRef.current = true;
@@ -159,11 +146,6 @@ export function useStorageData(): ShelfData {
         setTrash(await repo.getTrashEntries());
       }
 
-      if (KEY_WORKSPACE_INDEX in changes || keys.some(isWorkspaceKey)) {
-        setWorkspaces(await repo.getWorkspaces());
-      }
-      if (KEY_TRASH_BATCH_INDEX in changes || keys.some(isTrashBatchKey)) setTrashBatches(await repo.getTrashBatches());
-
       if (!(await applyGroupChanges(changes))) refresh();
     },
     [applyGroupChanges, refresh],
@@ -215,8 +197,6 @@ export function useStorageData(): ShelfData {
     groups,
     settings: settings ?? ({} as Settings),
     trash,
-    workspaces,
-    trashBatches,
     loading: loading || (settings === null && !loadError),
     loadError,
     refresh,

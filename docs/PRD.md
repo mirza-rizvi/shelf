@@ -3,9 +3,7 @@
 **Product:** Shelf — a privacy-first tab manager for Chrome (Manifest V3)
 **Version:** 1.0.0 · **Status:** implemented MVP
 
-> **Initial public release (2026-08-18) — useful, not bloated.** Includes local workspaces, advanced capture scopes/destinations, save-without-closing, duplicate prevention/cleanup, multi-select bulk actions, native drag reorder, context-menu actions, keyboard commands, excluded domains, versioned workspace-aware export/import, and recoverable workspace deletion. These features require no cloud service, content script, host permission, analytics, or persistent background process.
-
-> **URL-list usability pass (2026-08-17).** Added comfortable/compact rows, exact-hostname filtering, independent session/tab sorting, filtered select-all, controlled collapse/expand-all, clearer primary restore actions, and overflow menus for secondary actions. These are presentational/local preference changes with no new permissions or dependencies.
+> **Simplified public release (2026-08-19).** The manager intentionally exposes one flat session list and one search field. Workspaces, sorting/filter modes, density controls, bulk selection, drag ordering, and secondary action menus were removed after they made the core save/search/restore workflow harder to use. Backup, import, duplicate cleanup, privacy information, and help live in Settings.
 
 ## 1. Problem
 
@@ -38,20 +36,16 @@ Chrome now natively covers the *memory* half of this problem (Memory Saver) and 
 - Save tabs: this tab / current window / highlighted tabs / native tab group / left / right / all except active / all windows. Capture is available from the popup, context menu, and keyboard commands.
 - Save into a new session or append to an existing session, with optional close-after-save. All-window capture creates one session per source window.
 - Write-verify-close: tabs close only after saved data is verified on disk.
-- Restore: single tab, whole group, everything; default keeps items on the shelf; optional restore-and-remove (goes to trash, undoable).
+- Restore: single tab or whole group; default keeps items on the shelf and an optional setting moves restored items to trash.
 - Preserve Chrome native tab groups (title, color, collapsed) across save/restore.
-- Workspace → session → tab organization, including create/rename/delete workspace and recoverable workspace deletion.
 - Delete tab/session → local 30-day trash + undo.
-- Rename/duplicate sessions; split or merge through multi-select Move; reorder sessions and tabs with native drag-and-drop.
 - Search across group names, tab titles, URLs (`/` shortcut).
-- Filter the active workspace by exact hostname; sort sessions and tabs without rewriting manual order; switch between comfortable and compact rows.
-- Duplicate removal across the current view or all data; optional duplicate prevention while saving.
-- Export: versioned JSON (workspaces included) and OneTab-compatible text. Import: both, with hostile-input validation and future-version refusal.
+- Global duplicate cleanup from Settings; optional duplicate prevention while saving.
+- Export: versioned JSON. Import: Shelf JSON or OneTab text, with hostile-input validation and future-version refusal.
 - Simple optional per-window tab limit: oldest excess tabs auto-save; active, pinned, audible, unloaded, and excluded-domain tabs are protected.
 - Versioned schema with resumable migrations and downgrade safety.
 - Popup + full-page manager; light/dark/system theme; keyboard accessible.
 - Manager opens as a pinned leftmost tab (OneTab-style).
-- Bulk actions: select across sessions → Restore / Move to session or workspace / Copy URLs / Delete.
 - Zero network egress, no account, no sync, no content scripts, and no host permissions.
 
 ### Post-MVP — add only with demonstrated value
@@ -75,11 +69,11 @@ Chrome now natively covers the *memory* half of this problem (Memory Saver) and 
 
 ## 5. User flows
 
-1. **Save a window:** popup → choose workspace/destination and whether to close → "Save this window" → tabs written + verified → requested tabs close → manager shows the session; toast confirms.
-2. **Restore:** manager → click a tab (opens, stays on shelf) or "Restore" (whole group) or "Restore & remove" (group → trash, undoable).
+1. **Save a window:** popup → optionally choose an existing destination session and whether to close → "Save this window" → tabs written + verified → requested tabs close → manager shows the session; toast confirms.
+2. **Restore:** manager → restore one tab or the whole session. The saved copy remains unless the restore-removal setting is enabled.
 3. **Accidental delete:** Delete → toast "Moved to trash — Undo" (8 s) → or Trash page → "Put back" any time within retention.
 4. **Tab limit:** user enables a per-window limit → excess loaded tabs are saved and closed oldest-first; active, pinned, audible, and excluded-domain tabs remain open.
-5. **Migration from OneTab:** OneTab → Export URLs → Shelf manager → Import → groups appear; nothing uploaded anywhere.
+5. **Migration from OneTab:** OneTab → Export URLs → Shelf Settings → Data → Import → sessions appear; nothing uploaded anywhere.
 6. **Disaster recovery:** import a previously exported JSON (snapshot feature removed in v0.3).
 
 ## 6. Known limitations (documented honestly)

@@ -13,9 +13,8 @@ import * as journal from '../lib/services/journal';
 import * as trash from '../lib/services/trash';
 import * as tabLimit from '../lib/services/tabLimit';
 import { captureTabs } from '../lib/services/capture';
-import { restoreAll, restoreGroup, restoreTab } from '../lib/services/restore';
+import { restoreGroup, restoreTab } from '../lib/services/restore';
 import * as organization from '../lib/services/organization';
-import * as workspaces from '../lib/services/workspaces';
 
 /**
  * Shelf background service worker.
@@ -34,6 +33,13 @@ export default defineBackground(() => {
     ['shelf-save-window', 'Save this window', 'window'],
   ] as const;
 
+  /** Event listeners cannot return promises to Chrome. Always terminate async
+   * work here so a transient tab/storage race does not become an unhandled
+   * service-worker rejection in chrome://extensions. */
+  function runInBackground(task: Promise<unknown>): void {
+    void task.catch(() => {});
+  }
+
   function installContextMenus(): Promise<void> {
     return chrome.contextMenus.removeAll().then(() => {
       for (const [id, title] of MENU_SCOPES) chrome.contextMenus.create({ id, title, contexts: ['action', 'page'] });
@@ -42,16 +48,18 @@ export default defineBackground(() => {
 
   chrome.contextMenus.onClicked.addListener((info) => {
     const match = MENU_SCOPES.find(([id]) => id === info.menuItemId);
-    if (match) void handleCommand({ cmd: 'capture', scope: match[2] });
+    if (match) runInBackground(handleCommand({ cmd: 'capture', scope: match[2] }));
   });
 
   chrome.commands.onCommand.addListener((command) => {
     if (command === 'open-manager') {
-      void ensurePinnedManager().then((id) => id === null ? undefined : chrome.tabs.update(id, { active: true }));
+      runInBackground(
+        ensurePinnedManager().then((id) => id === null ? undefined : chrome.tabs.update(id, { active: true })),
+      );
     } else if (command === 'save-window') {
-      void handleCommand({ cmd: 'capture', scope: 'window' });
+      runInBackground(handleCommand({ cmd: 'capture', scope: 'window' }));
     } else if (command === 'save-selected') {
-      void handleCommand({ cmd: 'capture', scope: 'selected' });
+      runInBackground(handleCommand({ cmd: 'capture', scope: 'selected' }));
     }
   });
 
@@ -142,7 +150,7 @@ export default defineBackground(() => {
   function scheduleEnsureManager(): void {
     clearTimeout(ensureTimer);
     ensureTimer = setTimeout(() => {
-      void ensurePinnedManager();
+      runInBackground(ensurePinnedManager());
     }, 300);
   }
 
@@ -158,16 +166,15 @@ export default defineBackground(() => {
     scheduleEnsureManager();
   });
 
-  // FILTERED: this handler reads only changeInfo.url and changeInfo.pinned, but
-  // an unfiltered onUpdated fires on every status/title/favIconUrl/audible
-  // change on every tab in the browser — each one a service-worker wakeup for
-  // an immediate early-return. The filter is a hint Chrome applies before
-  // dispatch; if an older build ignores it the handler behaves identically.
+  // Chrome's tabs.onUpdated event does not accept an event-filter argument.
+  // Keep this synchronous guard first so unrelated status/title/favicon/audio
+  // updates return before doing manager-tab work.
   const onTabUpdated = (
     tabId: number,
     changeInfo: chrome.tabs.OnUpdatedInfo,
     tab: chrome.tabs.Tab,
   ): void => {
+    if (changeInfo.url === undefined && changeInfo.pinned === undefined) return;
     if (!isManagerTab(tab)) {
       // The anchor was navigated AWAY in place (user typed a URL into it):
       // no onRemoved ever fires, so this is the only signal. Recreate the
@@ -190,18 +197,7 @@ export default defineBackground(() => {
     }
   };
 
-  // @types/chrome 0.2 doesn't model onUpdated's UpdateFilter overload, which
-  // is MV3-supported and documented. Narrow local shim rather than an ambient
-  // module augmentation.
-  type OnUpdatedWithFilter = {
-    addListener(
-      callback: typeof onTabUpdated,
-      filter?: { urls?: string[]; properties?: string[]; tabId?: number; windowId?: number },
-    ): void;
-  };
-  (chrome.tabs.onUpdated as unknown as OnUpdatedWithFilter).addListener(onTabUpdated, {
-    properties: ['url', 'pinned'],
-  });
+  chrome.tabs.onUpdated.addListener(onTabUpdated);
 
   /** OneTab-style anchor tab: a pinned manager tab always exists at the far
    * left while the browser runs. Re-pins if the user unpinned it; never
@@ -328,7 +324,6 @@ export default defineBackground(() => {
         const settings = await repo.getSettings();
         const capture = await captureTabs(message.scope, {
           closeOriginals: message.closeOriginals ?? settings.captureClosesTabs,
-          workspaceId: message.workspaceId,
           destinationGroupId: message.destinationGroupId,
           allowDuplicates: message.allowDuplicates,
         });
@@ -361,30 +356,6 @@ export default defineBackground(() => {
         await tabLimit.noteBulkOperation();
         return { ok: true, restore };
       }
-      case 'restoreSelected': {
-        const result = { restored: 0, skipped: [] as { url: string; title: string; reason: string }[] };
-        for (const item of message.items) {
-          const group = await repo.getGroup(item.groupId);
-          const tab = group?.tabs.find((candidate) => candidate.id === item.tabId);
-          if (!tab) continue;
-          const restored = await restoreTab(tab);
-          result.restored += restored.restored;
-          result.skipped.push(...restored.skipped);
-          if (message.removeAfter && restored.restored > 0) await trash.trashTab(item.groupId, item.tabId);
-        }
-        return { ok: true, restore: result };
-      }
-      case 'restoreAll': {
-        // Don't flash an empty window open+shut when there's nothing to restore.
-        const groups = await repo.getAllGroups();
-        if (groups.length === 0) return { ok: true, restore: { restored: 0, skipped: [] } };
-        await tabLimit.noteBulkOperation();
-        const target = await createRestoreWindow();
-        const restore = await restoreAll({ removeAfter: false, windowId: target?.windowId });
-        await finishRestoreWindow(target, restore.restored);
-        await tabLimit.noteBulkOperation();
-        return { ok: true, restore };
-      }
       case 'trashGroup': {
         const trashEntryId = await trash.trashGroup(message.groupId);
         return { ok: true, trashEntryId };
@@ -394,11 +365,7 @@ export default defineBackground(() => {
         return { ok: true, trashEntryId };
       }
       case 'trashAll': {
-        const groups = await repo.getAllGroups();
-        let trashed = 0;
-        for (const g of groups) {
-          if ((await trash.trashGroup(g.id)) !== null) trashed += 1;
-        }
+        const trashed = await trash.trashAll();
         return { ok: true, trashed };
       }
       case 'emptyTrash': {
@@ -413,56 +380,9 @@ export default defineBackground(() => {
         await trash.purgeTrashEntry(message.entryId);
         return { ok: true };
       }
-      case 'renameGroup': {
-        const group = await repo.getGroup(message.groupId);
-        if (!group) return { ok: false, error: 'Group not found' };
-        const name = message.name.trim().slice(0, 512);
-        await repo.putGroup({ ...group, name: name || group.name, updatedAt: Date.now() });
-        return { ok: true };
-      }
-      case 'duplicateGroup': {
-        const groupId = await organization.duplicateGroup(message.groupId);
-        return { ok: true, groupId };
-      }
-      case 'moveGroup': {
-        await organization.moveGroup(message.groupId, message.workspaceId);
-        return { ok: true };
-      }
-      case 'reorderGroups': {
-        await repo.reorderGroups(message.groupIds);
-        return { ok: true };
-      }
-      case 'reorderTabs': {
-        await organization.reorderTabs(message.groupId, message.tabIds);
-        return { ok: true };
-      }
-      case 'moveTabs': {
-        const moved = await organization.moveTabs(message.items, message.destinationGroupId, message.workspaceId);
-        return { ok: true, ...moved };
-      }
-      case 'trashSelected': {
-        const trashed = await organization.trashSelected(message.items);
-        return { ok: true, trashed };
-      }
       case 'removeDuplicates': {
-        const removed = await organization.removeDuplicates(message.groupIds, message.keep);
+        const removed = await organization.removeDuplicates(message.keep);
         return { ok: true, removed };
-      }
-      case 'createWorkspace': {
-        const workspace = await repo.createWorkspace(message.name);
-        return { ok: true, workspaceId: workspace.id };
-      }
-      case 'renameWorkspace': {
-        await repo.renameWorkspace(message.workspaceId, message.name);
-        return { ok: true };
-      }
-      case 'deleteWorkspace': {
-        const trashed = await workspaces.deleteWorkspace(message.workspaceId);
-        return { ok: true, trashed };
-      }
-      case 'undoWorkspace': {
-        const moved = await workspaces.restoreWorkspace(message.batchId);
-        return { ok: true, moved };
       }
       case 'saveSettings': {
         // Partial patch merged onto current state, SERIALIZED through a queue:
@@ -490,11 +410,6 @@ export default defineBackground(() => {
         const parsed = parseJsonImport(message.json);
         if (parsed.groups.length === 0 && parsed.errors.length > 0) {
           return { ok: false, error: parsed.errors.join(' ') };
-        }
-        for (const workspace of parsed.workspaces) await repo.putWorkspace(workspace);
-        if (parsed.workspaces.length > 0) {
-          const index = await repo.getWorkspaceIndex();
-          await chrome.storage.local.set({ workspaceIndex: { workspaceOrder: [...index.workspaceOrder, ...parsed.workspaces.map((workspace) => workspace.id)], updatedAt: Date.now() } });
         }
         for (const g of [...parsed.groups].reverse()) {
           await repo.putGroupVerified(g);

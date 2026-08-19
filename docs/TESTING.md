@@ -1,20 +1,19 @@
 # Shelf Test Plan
 
-## Automated (run: `npm test` — currently 17 files and 129 tests; trust the runner if this count changes)
+## Automated (`npm test`)
 
 ### Unit (pure logic, no browser)
 - `lib/urls.test.ts` — restore allowlist (incl. `javascript:`/`data:` rejection).
 - `lib/eviction.test.ts` — protections (active/pinned/audible), grouped-tabs-evictable, oldest-first ordering with fallbacks.
 - `lib/search.test.ts` — case-insensitivity, AND-terms, group-name matches.
 - `lib/duplicates.test.ts` — canonical URL comparison, excluded-domain matching, and cross-session duplicate locations.
-- `lib/listView.test.ts` — workspace/domain filtering, independent sorting, and a 10,000-tab performance fixture.
 - `lib/importExport/importOneTab.test.ts` — real-format fixtures, CRLF, bare URLs, pipes in titles, dangerous-line skipping.
-- `lib/importExport/importJson.test.ts` — round-trip fidelity, id regeneration, prototype-pollution immunity, clamps, type confusion, out-of-range indexes.
+- `lib/importExport/importJson.test.ts` — round-trip fidelity, legacy-workspace flattening, id regeneration, prototype-pollution immunity, clamps, type confusion, and out-of-range indexes.
 
 ### Components and manager behavior
-- `components/GroupCard.test.tsx` — safe URL rendering, selection, row caps, restore actions, and menu behavior.
+- `components/GroupCard.test.tsx` — safe URL rendering, fixed rows, row caps, collapse, and essential restore/delete actions.
 - `components/useStorageData.test.tsx` — initial storage reads and coalesced updates after local-storage changes.
-- `entrypoints/manager/pages/Home.test.tsx` — workspace/list controls and top-level manager interactions.
+- `entrypoints/manager/pages/Home.test.tsx` — search-only manager controls, filtering, and `/` focus shortcut.
 
 ### Integration (fake chrome via `wxt/testing`)
 - `tests/integration/repo.test.ts` — shard round-trip, index ordering, dangling-entry pruning, orphan detection, settings deep-merge.
@@ -23,7 +22,7 @@
 - `tests/integration/trash.test.ts` — trash/restore/purge lifecycle; last-tab deletion removes group.
 - `tests/integration/restore.test.ts` — lazy restore (discard after group reconstruction, failures tolerated, missing API tolerated); windowId targeting; blocked-scheme skipping.
 - `tests/integration/tabLimit.test.ts` — over-limit auto-save of oldest excess; protections; disabled + startup-grace no-ops.
-- `tests/integration/migrations.test.ts` — fresh seed, idempotence, downgrade refusal, full v1→v2 settings migration + backup-key cleanup.
+- `tests/integration/migrations.test.ts` — fresh seed, idempotence, downgrade refusal, legacy settings cleanup, and verified v3 workspace flattening.
 
 ## Manual browser checklist (before each release)
 
@@ -38,14 +37,13 @@ Load: `npm run build` → `chrome://extensions` → Developer mode → Load unpa
 - [ ] Create a window with named/colored tab groups + one pinned tab → popup "Save this window" → tabs close only after the shelf appears (manager has no save buttons — popup only).
 - [ ] Popup "Save this tab" → only the active tab shelved + closed ("Tab ·" shelf).
 - [ ] Popup "Save tabs to the left/right" → only that side of the active tab is saved; pinned tabs and the active tab stay open; an empty side shows "Nothing to save."
-- [ ] “More save options” supports highlighted tabs, the active native tab group, all other tabs, and all windows; workspace, destination session, and close-after-save choices are honored.
-- [ ] Help nav link in the Shelf tab → #/help page renders.
+- [ ] “More save options” supports highlighted tabs, the active native tab group, all other tabs, all windows, destination session, and close-after-save choices.
+- [ ] Manager header contains only Shelves, Trash, and Settings; Help is included in Settings.
 - [ ] Restore group → order, pinned state, group names/colors identical; entry stays on shelf (default).
 - [ ] Click a single saved tab → it opens AND loads the page (not blank, not unloaded).
 - [ ] Restore a group → tabs open UNLOADED (grey in Chrome Task Manager, ~0 MB each) with correct titles/URLs, and load on first click — never blank.
 - [ ] "Restore groups into a new window" setting → group opens in a fresh window with no leftover blank New Tab; single-tab restore stays in the current window.
 - [ ] "Include pinned tabs when saving a window" off → window/all-window saves skip pinned tabs; "Save this tab" on a pinned tab still saves it.
-- [ ] Restore & remove → group moves to Trash → Undo toast restores it.
 - [ ] "Remove tabs from shelf after restoring" setting → restore moves the entry to trash.
 
 ### Crash safety
@@ -74,15 +72,16 @@ Load: `npm run build` → `chrome://extensions` → Developer mode → Load unpa
 - [ ] Quit Chrome → next startup brings it back (no zombie windows).
 
 ### Confirmations
-- [ ] More → "Delete all shelves…" asks with shelf/tab counts; Cancel is a no-op; OK moves every shelf to Trash (recoverable).
-- [ ] More → "Restore everything…" asks with the total tab count before opening anything.
+- [ ] Settings duplicate cleanup asks for confirmation and moves removed copies to Trash.
 - [ ] Trash "Delete forever…" and "Empty trash…" both ask with "cannot be undone" wording; Cancel is a no-op.
 
 ### Export / import
-- [ ] Export JSON + export text; re-import both; import a real OneTab export.
+- [ ] Settings → Data exports JSON; re-import it and import a real OneTab text export.
+- [ ] The native file input stays hidden; no “No file chosen” label appears.
 
 ### Manager page
-- [ ] Stats strip shows shelf/tab counts, MB stored, and the "est." memory line; hidden when the shelf is empty. Shelf list fills the page width.
+- [ ] Search is the only persistent page-level control; there are no workspace, domain, sort, density, bulk-selection, or global expand/collapse controls.
+- [ ] Session rows expose collapse, count, Restore, and Delete; tab rows expose title, domain, Restore, and Delete.
 
 ### Edge cases
 - [ ] Open several links and save the window while they're still loading → all saved with their real URLs (pendingUrl), zero blank entries.
@@ -99,5 +98,5 @@ Load: `npm run build` → `chrome://extensions` → Developer mode → Load unpa
 - [ ] Toggle two settings checkboxes in quick succession → both stick (partial-patch saves, no stale overwrite).
 
 ### Upgrade / reinstall
-- [ ] Upgrade schema v1 and v2 fixtures to schema v3 → sessions remain intact, the Inbox workspace is created, settings are deep-merged, legacy backup keys are removed, and existing choices are preserved.
+- [ ] Upgrade schema v1/v2/v3 fixtures to schema v4 → every live and trashed tab remains intact, obsolete workspace/view metadata is removed, and order is preserved.
 - [ ] Uninstall → reinstall → import previously exported JSON → full fidelity.

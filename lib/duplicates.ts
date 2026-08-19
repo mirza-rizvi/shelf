@@ -53,23 +53,3 @@ export function findDuplicateSets(groups: readonly SavedGroup[]): DuplicateSet[]
     .map(([url, locations]) => ({ canonicalUrl: url, locations }))
     .sort((a, b) => b.locations.length - a.locations.length || a.canonicalUrl.localeCompare(b.canonicalUrl));
 }
-
-/** Preserve first occurrence and return both the kept tabs and skip count. */
-export function dedupeTabs(
-  tabs: readonly TabItem[],
-  existingUrls: ReadonlySet<string> = new Set(),
-): { tabs: TabItem[]; skipped: number } {
-  const seen = new Set(existingUrls);
-  const kept: TabItem[] = [];
-  let skipped = 0;
-  for (const tab of tabs) {
-    const key = canonicalUrl(tab.url);
-    if (seen.has(key)) {
-      skipped += 1;
-      continue;
-    }
-    seen.add(key);
-    kept.push(tab);
-  }
-  return { tabs: kept, skipped };
-}

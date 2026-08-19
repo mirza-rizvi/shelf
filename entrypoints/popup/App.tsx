@@ -3,7 +3,7 @@ import { ToastProvider, useToast } from '../../components/Toast';
 import type { CaptureScope } from '../../lib/services/capture';
 import { sendCmd } from '../../lib/messaging';
 import * as repo from '../../lib/storage/repo';
-import type { SavedGroup, Workspace } from '../../lib/types';
+import type { SavedGroup } from '../../lib/types';
 
 const SAVE_ACTIONS: { scope: CaptureScope; label: string }[] = [
   { scope: 'tab', label: 'Save this tab' },
@@ -20,18 +20,15 @@ function PopupInner() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [closeOriginals, setCloseOriginals] = useState(true);
-  const [workspaceId, setWorkspaceId] = useState('inbox');
   const [destinationGroupId, setDestinationGroupId] = useState('');
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [groups, setGroups] = useState<SavedGroup[]>([]);
 
   useEffect(() => {
     void repo.ensureReady().then(async () => {
-      const [settings, savedWorkspaces, savedGroups] = await Promise.all([
-        repo.getSettings(), repo.getWorkspaces(), repo.getAllGroups(),
+      const [settings, savedGroups] = await Promise.all([
+        repo.getSettings(), repo.getAllGroups(),
       ]);
       setCloseOriginals(settings.captureClosesTabs);
-      setWorkspaces(savedWorkspaces);
       setGroups(savedGroups);
     });
   }, []);
@@ -39,7 +36,7 @@ function PopupInner() {
   const save = (scope: CaptureScope) => {
     setBusy(true);
     void sendCmd({
-      cmd: 'capture', scope, closeOriginals, workspaceId,
+      cmd: 'capture', scope, closeOriginals,
       destinationGroupId: destinationGroupId || undefined,
     }).then((res) => {
       setBusy(false);
@@ -74,12 +71,6 @@ function PopupInner() {
             <button key={scope} className="btn" disabled={busy} onClick={() => save(scope)}>{label}</button>
           ))}
         </div>
-        <label className="popup-field">
-          Workspace
-          <select value={workspaceId} disabled={Boolean(destinationGroupId)} onChange={(e) => setWorkspaceId(e.target.value)}>
-            {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-          </select>
-        </label>
         <label className="popup-field">
           Add to session
           <select value={destinationGroupId} onChange={(e) => setDestinationGroupId(e.target.value)}>

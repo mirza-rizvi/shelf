@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalUrl, dedupeTabs, findDuplicateSets, matchesExcludedDomain } from './duplicates';
+import { canonicalUrl, findDuplicateSets, matchesExcludedDomain } from './duplicates';
 import type { SavedGroup, TabItem } from './types';
 
 const tab = (id: string, url: string, savedAt = 1): TabItem => ({
@@ -26,15 +26,6 @@ describe('canonical URL duplicate policy', () => {
     expect(canonicalUrl('https://example.com/a?q=1#one')).not.toBe(
       canonicalUrl('https://example.com/a?q=1#two'),
     );
-  });
-
-  it('deduplicates incoming tabs against themselves and a destination', () => {
-    const result = dedupeTabs(
-      [tab('a', 'https://example.com'), tab('b', 'https://EXAMPLE.com/'), tab('c', 'https://other.com')],
-      new Set([canonicalUrl('https://other.com')]),
-    );
-    expect(result.tabs.map((item) => item.id)).toEqual(['a']);
-    expect(result.skipped).toBe(2);
   });
 
   it('matches a domain and its subdomains, not suffix lookalikes', () => {

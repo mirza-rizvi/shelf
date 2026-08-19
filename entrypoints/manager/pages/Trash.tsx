@@ -5,11 +5,11 @@ import { TRASH_RETENTION_DAYS } from '../../../lib/constants';
 import { sendCmd } from '../../../lib/messaging';
 
 export function TrashPage({ data }: { data: ShelfData }) {
-  const { trash, trashBatches } = data;
+  const { trash } = data;
   const toast = useToast();
 
   if (data.loadError) return <LoadError retry={data.refresh} />;
-  if (trash.length === 0 && trashBatches.length === 0) {
+  if (trash.length === 0) {
     return (
       <div className="empty-state">
         <h2>Trash is empty</h2>
@@ -81,26 +81,6 @@ export function TrashPage({ data }: { data: ShelfData }) {
               }}
             >
               Delete forever…
-            </button>
-          </div>
-        </div>
-      ))}
-      {trashBatches.filter((batch) => batch.workspace).map((batch) => (
-        <div key={batch.id} className="trash-entry">
-          <div className="info">
-            <div className="name">Workspace: {batch.workspace!.name}</div>
-            <div className="when">
-              {batch.entryIds.length} sessions · deleted {new Date(batch.deletedAt).toLocaleString()}
-            </div>
-          </div>
-          <div className="actions">
-            <button
-              className="btn btn-sm"
-              onClick={() => void sendCmd({ cmd: 'undoWorkspace', batchId: batch.id }).then((res) => {
-                toast.show(res.ok ? 'Workspace and sessions restored.' : res.error);
-              })}
-            >
-              Put back all
             </button>
           </div>
         </div>

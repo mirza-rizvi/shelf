@@ -4,6 +4,22 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 
 ## [Unreleased]
 
+### Added
+
+- Added a recoverable **Delete all** action with an in-extension confirmation modal showing the affected session and tab counts.
+
+### Changed
+
+- Simplified the manager to one flat session list with search as its only persistent control.
+- Moved JSON backup, Shelf/OneTab import, duplicate cleanup, privacy information, and help into Settings.
+- Reduced session and tab actions to restore and recoverable delete.
+- Added a verified schema-v4 migration that safely flattens existing workspace-aware data.
+
+### Removed
+
+- Workspaces, domain filtering, sorting modes, density controls, bulk selection, drag ordering, and secondary action menus.
+- Plain-text export, global restore/delete actions, and the separate Help page.
+
 ## [1.0.0] - 2026-08-18
 
 ### Added

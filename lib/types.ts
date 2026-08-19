@@ -3,8 +3,7 @@
  * see lib/storage/keys.ts). Pure types only: no chrome.* imports here.
  */
 
-export const CURRENT_SCHEMA_VERSION = 3;
-export const INBOX_WORKSPACE_ID = 'inbox';
+export const CURRENT_SCHEMA_VERSION = 4;
 
 /** Colors mirror chrome.tabGroups.Color (stable string union, safe to persist). */
 export type TabGroupColor =
@@ -43,30 +42,12 @@ export interface SavedGroup {
   updatedAt: number;
   chromeGroups: SavedChromeTabGroup[];
   tabs: TabItem[]; // display + restore order
-  /** Missing on legacy v1/v2 shards; missing always resolves to Inbox. */
-  workspaceId?: string;
-}
-
-export interface Workspace {
-  id: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface WorkspaceIndex {
-  workspaceOrder: string[];
-  updatedAt: number;
 }
 
 export interface TabLimitSettings {
   enabled: boolean;
   maxTabs: number;
 }
-
-export type ManagerDensity = 'comfortable' | 'compact';
-export type ManagerSessionSort = 'manual' | 'newest' | 'oldest' | 'name' | 'tab-count';
-export type ManagerTabSort = 'manual' | 'title' | 'domain' | 'newest' | 'oldest';
 
 export interface Settings {
   theme: 'system' | 'light' | 'dark';
@@ -82,10 +63,7 @@ export interface Settings {
   skipDuplicatesOnSave: boolean;
   /** Normalized host names. A rule also matches that host's subdomains. */
   excludedDomains: string[];
-  managerDensity: ManagerDensity;
-  managerSessionSort: ManagerSessionSort;
-  managerTabSort: ManagerTabSort;
-  /** Updated after a successful user-initiated JSON/text export. */
+  /** Updated after a successful user-initiated JSON export. */
   lastExportAt?: number;
   /** Per-window limit; excess tabs auto-save to a shelf (oldest first). */
   tabLimit: TabLimitSettings;
@@ -97,16 +75,6 @@ export interface TrashEntry {
   /** What was deleted; single-tab deletions are wrapped in a 1-tab group. */
   kind: 'group' | 'tab';
   group: SavedGroup;
-  /** Links entries created by one bulk/workspace operation. */
-  batchId?: string;
-}
-
-export interface TrashBatch {
-  id: string;
-  kind: 'bulk-tabs' | 'workspace';
-  deletedAt: number;
-  entryIds: string[];
-  workspace?: Workspace;
 }
 
 /** Crash-recovery journal entry for save-then-close operations. */

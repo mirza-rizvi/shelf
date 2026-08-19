@@ -37,7 +37,7 @@ describe('runMigrations', () => {
   });
 });
 
-describe('v1 -> v2 migration', () => {
+describe('v1 -> current migration', () => {
   const v1Settings = {
     theme: 'dark',
     restoreRemovesFromList: true,
@@ -96,9 +96,6 @@ describe('v1 -> v2 migration', () => {
     expect(Object.keys(s).sort()).toEqual([
       'captureClosesTabs',
       'excludedDomains',
-      'managerDensity',
-      'managerSessionSort',
-      'managerTabSort',
       'restoreInNewWindow',
       'restoreRemovesFromList',
       'savePinnedTabs',
@@ -147,9 +144,6 @@ describe('v1 -> v2 migration', () => {
       captureClosesTabs: true,
       skipDuplicatesOnSave: true,
       excludedDomains: [],
-      managerDensity: 'comfortable',
-      managerSessionSort: 'manual',
-      managerTabSort: 'manual',
       tabLimit: { enabled: false, maxTabs: 25 },
     });
   });
@@ -159,5 +153,86 @@ describe('v1 -> v2 migration', () => {
     await runMigrations();
     const res = await chrome.storage.local.get('migration-snapshot');
     expect(res['migration-snapshot']).toBeUndefined();
+  });
+});
+
+describe('v3 -> v4 flat-session migration', () => {
+  const tab = { id: 't1', url: 'https://private.example/path', title: 'Private', pinned: false, savedAt: 5, chromeGroupIdx: null };
+  const liveGroup = {
+    id: 'g1',
+    workspaceId: 'work',
+    name: 'Research',
+    createdAt: 1,
+    updatedAt: 2,
+    chromeGroups: [],
+    tabs: [tab],
+  };
+  const trashedGroup = {
+    ...liveGroup,
+    id: 'g2',
+    workspaceId: 'personal',
+    tabs: [{ ...tab, id: 't2', url: 'https://trash.example/' }],
+  };
+
+  it('flattens live and trashed sessions without changing tab payloads or order', async () => {
+    await chrome.storage.local.set({
+      [KEY_META]: { schemaVersion: 3, installedAt: 123 },
+      [KEY_SETTINGS]: {
+        theme: 'dark',
+        restoreRemovesFromList: true,
+        savePinnedTabs: true,
+        restoreInNewWindow: true,
+        captureClosesTabs: false,
+        skipDuplicatesOnSave: false,
+        excludedDomains: ['mail.example'],
+        managerDensity: 'compact',
+        managerSessionSort: 'name',
+        managerTabSort: 'domain',
+        lastExportAt: 77,
+        tabLimit: { enabled: true, maxTabs: 44 },
+      },
+      index: { groupOrder: ['g1'], updatedAt: 10 },
+      'group:g1': liveGroup,
+      trashIndex: { order: ['deleted'] },
+      'trash:deleted': { id: 'deleted', deletedAt: 8, kind: 'group', batchId: 'batch', group: trashedGroup },
+      workspaceIndex: { workspaceOrder: ['inbox', 'work', 'personal'], updatedAt: 3 },
+      'workspace:inbox': { id: 'inbox', name: 'Inbox' },
+      'workspace:work': { id: 'work', name: 'Work' },
+      'workspace:personal': { id: 'personal', name: 'Personal' },
+      trashBatchIndex: { order: ['batch'] },
+      'trashBatch:batch': { id: 'batch', kind: 'workspace', entryIds: ['deleted'] },
+    });
+
+    await runMigrations();
+    const result = await chrome.storage.local.get(null);
+    expect(result[KEY_META]).toEqual({ schemaVersion: 4, installedAt: 123 });
+    expect(result['group:g1']).toEqual({
+      id: 'g1', name: 'Research', createdAt: 1, updatedAt: 2, chromeGroups: [], tabs: [tab],
+    });
+    expect(result['trash:deleted']).toEqual({
+      id: 'deleted', deletedAt: 8, kind: 'group', group: {
+        id: 'g2', name: 'Research', createdAt: 1, updatedAt: 2, chromeGroups: [],
+        tabs: [{ ...tab, id: 't2', url: 'https://trash.example/' }],
+      },
+    });
+    expect(result['index']).toEqual({ groupOrder: ['g1'], updatedAt: 10 });
+    expect(result['trashIndex']).toEqual({ order: ['deleted'] });
+    expect(result['workspaceIndex']).toBeUndefined();
+    expect(result['workspace:work']).toBeUndefined();
+    expect(result['trashBatchIndex']).toBeUndefined();
+    expect(result['trashBatch:batch']).toBeUndefined();
+
+    const settings = result[KEY_SETTINGS] as Record<string, unknown>;
+    expect(settings).toEqual({
+      theme: 'dark',
+      restoreRemovesFromList: true,
+      savePinnedTabs: true,
+      restoreInNewWindow: true,
+      captureClosesTabs: false,
+      skipDuplicatesOnSave: false,
+      excludedDomains: ['mail.example'],
+      lastExportAt: 77,
+      tabLimit: { enabled: true, maxTabs: 44 },
+    });
   });
 });

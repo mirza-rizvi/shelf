@@ -33,7 +33,6 @@ const demoGroups = [
   {
     id: 'demo-1',
     name: 'Window · Aug 3, 11:24 AM · 8 tabs',
-    workspaceId: 'demo-work',
     createdAt: now - 2 * HOUR,
     updatedAt: now - 2 * HOUR,
     chromeGroups: [{ title: 'Research', color: 'blue', collapsed: false }],
@@ -51,7 +50,6 @@ const demoGroups = [
   {
     id: 'demo-2',
     name: 'Trip planning',
-    workspaceId: 'inbox',
     createdAt: now - 3 * DAY,
     updatedAt: now - 3 * DAY,
     chromeGroups: [],
@@ -65,7 +63,6 @@ const demoGroups = [
   {
     id: 'demo-3',
     name: 'Weekend reading',
-    workspaceId: 'inbox',
     createdAt: now - 9 * DAY,
     updatedAt: now - 9 * DAY,
     chromeGroups: [],
@@ -78,11 +75,8 @@ const demoGroups = [
 ];
 
 const seed = {
-  meta: { schemaVersion: 3, installedAt: now - 30 * DAY },
+  meta: { schemaVersion: 4, installedAt: now - 30 * DAY },
   index: { groupOrder: ['demo-1', 'demo-2', 'demo-3'], updatedAt: now - 2 * HOUR },
-  workspaceIndex: { workspaceOrder: ['inbox', 'demo-work'], updatedAt: now - 2 * HOUR },
-  'workspace:inbox': { id: 'inbox', name: 'Inbox', createdAt: now - 30 * DAY, updatedAt: now - 2 * HOUR },
-  'workspace:demo-work': { id: 'demo-work', name: 'Work', createdAt: now - 20 * DAY, updatedAt: now - 2 * HOUR },
   'group:demo-1': demoGroups[0],
   'group:demo-2': demoGroups[1],
   'group:demo-3': demoGroups[2],

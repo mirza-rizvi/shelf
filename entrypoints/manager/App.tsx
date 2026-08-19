@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { ToastProvider } from '../../components/Toast';
 import { useHashRoute } from '../../components/useHashRoute';
 import { useStorageData } from '../../components/useStorageData';
-import { HelpPage } from './pages/Help';
 import { Home } from './pages/Home';
 import { SettingsPage } from './pages/Settings';
 import { TrashPage } from './pages/Trash';
@@ -19,9 +18,7 @@ export default function App() {
         ? 'Shelf — Trash'
         : route.path === '/settings'
           ? 'Shelf — Settings'
-          : route.path === '/help'
-            ? 'Shelf — Help'
-            : 'Shelf';
+          : 'Shelf';
   }, [route.path]);
 
   return (
@@ -41,17 +38,12 @@ export default function App() {
             <a href="#/settings" aria-current={route.path === '/settings' ? 'page' : undefined}>
               Settings
             </a>
-            <a href="#/help" aria-current={route.path === '/help' ? 'page' : undefined}>
-              Help
-            </a>
           </nav>
         </header>
         {route.path === '/settings' ? (
           <SettingsPage data={data} />
         ) : route.path === '/trash' ? (
           <TrashPage data={data} />
-        ) : route.path === '/help' ? (
-          <HelpPage />
         ) : (
           <Home data={data} />
         )}
