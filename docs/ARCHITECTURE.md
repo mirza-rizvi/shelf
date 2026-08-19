@@ -36,6 +36,8 @@ lib/
 
 `chrome.storage.session` (ephemeral, safe to lose): tab first-seen times, tab-limit latch, startup timestamp.
 
+The service worker sets `chrome.storage.local` to `TRUSTED_CONTEXTS` on startup. Shelf currently has no content scripts; this also prevents a future content script from inheriting access to saved URLs by default.
+
 **Sharding rationale:** one key per group means saves and deletes rewrite only that shard plus the small index — never the whole dataset. `storage.onChanged` diffs stay cheap; UI refresh is coalesced.
 
 **List derivation:** the manager preserves stored session/tab order and applies only text search through the pure `search` module. Collapse state is ephemeral. The page deliberately has no workspace, filter, sorting, density, bulk-selection, or drag state.
@@ -85,7 +87,7 @@ Capture filters own-origin pages, and the limiter excludes them, so no Shelf fea
 ## Tab-limit watcher
 
 `tabs.onCreated/onAttached/onRemoved` → note first-seen (session storage, writes serialized through a promise queue — burst events would otherwise lose entries) → 2 s trailing debounce → `runCheck()`:
-grace window 30 s (session-restore storm at startup; also renewed around every restore via `noteBulkOperation()` so a big restore can't evict the user's oldest tabs) → module in-flight guard + timestamp latch (stale >60 s ignored — a SW killed mid-check must not disable the limit) → count **loaded, saveworthy** tabs per window (discarded tabs cost ~0 RAM; blank/New Tab pages have nothing worth saving — neither is counted or evicted) → pure `selectEvictionCandidates()` (oldest first; active/pinned/audible always protected) → auto-save the excess via the same write-verify-close path.
+grace window 30 s (session-restore storm at startup; also renewed around every restore via `noteBulkOperation()` so a big restore can't evict the user's oldest tabs) → module in-flight guard + timestamp latch (stale >60 s ignored — a SW killed mid-check must not disable the limit) → count **loaded, saveworthy** tabs per window (discarded tabs use minimal memory; blank/New Tab pages have nothing worth saving — neither is counted or evicted) → pure `selectEvictionCandidates()` (oldest first; active/pinned/audible always protected) → auto-save the excess via the same write-verify-close path.
 
 ## Native tab groups
 
@@ -95,7 +97,7 @@ grace window 30 s (session-restore storm at startup; also renewed around every r
 
 Scheme allowlist (`http`, `https`, `file`, `about`, `chrome`); `javascript:`/`data:`/`vbscript:` are never opened (copy-only in UI). Every `tabs.create` is individually caught; one restricted URL never aborts a batch.
 
-**Lazy restore (group restores only):** restored tabs are `chrome.tabs.discard`ed so they cost ~0 RAM until clicked — but only AFTER their navigation commits (poll `tab.url` up to 20×100 ms; on timeout skip the discard — discarding pre-commit blanks the tab). Single-tab restore loads eagerly: the user clicked that tab to read it. Ungrouped tabs discard per creation chunk (bounds the load spike); grouped tabs only after `tabs.group()` runs (discard can replace the tab id), also chunked.
+**Lazy restore (group restores only):** restored tabs are `chrome.tabs.discard`ed to minimize memory use until clicked — but only AFTER their navigation commits (poll `tab.url` up to 20×100 ms; on timeout skip the discard — discarding pre-commit blanks the tab). Single-tab restore loads eagerly: the user clicked that tab to read it. Ungrouped tabs discard per creation chunk (bounds the load spike); grouped tabs only after `tabs.group()` runs (discard can replace the tab id), also chunked.
 
 ## Migrations
 

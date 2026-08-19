@@ -1,55 +1,77 @@
 # Shelf Privacy Policy
 
-_Last updated: 2026-08-19. This policy describes what Shelf actually does in code; the source is open for verification._
+_Last updated: 2026-08-20. This policy describes Shelf 1.0.0 and is kept with the public source code for verification._
 
-## The short version
+## Summary
 
-Shelf stores everything on your device and sends nothing anywhere. There is no server, no account, no analytics, and no tracking of any kind.
+Shelf handles browsing data only when you explicitly save tabs or import a backup. That data is stored locally on your device and is used only to provide Shelf's tab-saving, organization, search, restore, duplicate-cleanup, backup, and recovery features.
 
-## What Shelf stores, and where
+Shelf has no server, account, advertising, analytics, telemetry, or tracking. It does not transmit your saved tab data to the developer or any third party.
 
-When you save tabs, Shelf stores their **URL, page title, pinned state, tab-group name/color/collapsed state, session organization, and the time you saved them** in your browser's local extension storage (`chrome.storage.local`) on your device. Your settings and trash contents are stored the same way.
+## Data Shelf handles
 
-This data:
+Shelf stores the following in Chrome's local extension storage (`chrome.storage.local`):
 
-- **never leaves your device.** Shelf makes zero network requests. You can verify this: open DevTools → Network on any Shelf page, or read the source — there is no `fetch`, no XHR, no remote script, no CDN.
-- is **not synced** to any cloud, including Chrome Sync.
-- is **not readable by websites.** Only Shelf (and you) can read it.
-- is **deleted by Chrome if you uninstall the extension.** Export a JSON backup first if you want to keep it.
+- the URL and page title of each tab you explicitly save;
+- pinned state and saved Chrome tab-group title, color, and collapsed state;
+- session names, tab order, creation/update times, and saved times;
+- extension settings, including excluded domains and optional tab-limit settings;
+- recoverable copies of deleted tabs and sessions in Trash; and
+- equivalent data that you explicitly import from a Shelf backup or OneTab export.
 
-## What Shelf does NOT do
+Shelf reads the URLs and titles of currently open tabs when required for a user-facing save action or the optional tab-limit feature. It also checks open-tab URLs to locate and deduplicate its own disclosed pinned manager tab. Shelf does not retain unrelated open tabs or build a separate browsing-history log.
 
-- No analytics, telemetry, crash reporting, or "anonymous usage statistics".
-- No accounts, sign-ins, or identifiers.
-- No ads, affiliate links, or sponsored content.
-- No sharing feature that uploads your tabs to a server (deliberately omitted).
-- No selling or transferring of any data to anyone, ever — there is nothing to sell because nothing is collected.
+## How the data is used
+
+Shelf uses this data solely to provide the features visible in the extension: saving tabs, displaying and searching sessions, restoring tabs and Chrome tab groups, avoiding or removing duplicates, enforcing an optional tab limit, recovering deleted items, and importing or exporting backups.
+
+The data is:
+
+- stored only in local Chrome extension storage on your device;
+- not stored in Chrome Sync;
+- not transmitted to Shelf's developer, a remote server, or a third party;
+- not sold, rented, shared, or transferred;
+- not used for advertising, profiling, creditworthiness, or any unrelated purpose; and
+- not available for the developer or another human to read because Shelf never receives it.
+
+Shelf requests no host permissions and injects no content scripts. Websites cannot read Shelf's local extension storage. Shelf also restricts its local storage to trusted extension contexts.
+
+## Retention and deletion
+
+Live sessions remain on your device until you delete them or uninstall Shelf. Deleted tabs and sessions normally remain recoverable in Trash for up to 30 days; you can permanently remove them sooner by deleting an item from Trash or emptying Trash.
+
+Chrome deletes Shelf's extension storage when you uninstall the extension. If you want to retain your sessions, export a JSON backup before uninstalling.
+
+## Backups and imports
+
+JSON backups are generated locally and contain saved URLs, titles, organization, and settings in plain text. A backup remains wherever you choose to save it until you delete it. Shelf cannot access or delete exported files after they have been saved outside extension storage.
+
+Imported Shelf or OneTab files are read locally. Valid imported tab data is stored in the same local extension storage described above.
 
 ## Favicons
 
-Site icons shown in Shelf come from **Chrome's local favicon cache** via the extension `favicon` permission. Unlike some tab managers, Shelf never contacts Google's favicon service or the websites themselves to fetch icons, so rendering your list leaks nothing.
+Favicons displayed by Shelf come from Chrome's local favicon cache through the `favicon` permission. Shelf does not contact websites or an external favicon service to retrieve them.
 
-## Permissions, and why each one exists
+## Permissions
 
 | Permission | Why Shelf needs it |
 |---|---|
-| `tabs` | Read the titles and URLs of your open tabs so they can be saved. This is the permission behind Chrome's "Read your browsing history" warning — it applies to open tabs, and it is the minimum required for any tab manager to function. |
-| `storage`, `unlimitedStorage` | Keep your saved tabs and settings on your device without a 10 MB cap, and protect them from storage eviction. |
-| `tabGroups` | Preserve your Chrome tab groups' names and colors when saving and restoring. |
-| `alarms` | Schedule trash cleanup and tab-limit checks. |
-| `favicon` | Show site icons from Chrome's local cache (see above). |
-| `contextMenus` | Offer save commands only when you explicitly choose them from Chrome's context menu. |
+| `tabs` | Read the URLs, titles, pinned state, and grouping of open tabs being saved; close tabs after a verified save; create and manage restored tabs; and maintain Shelf's disclosed pinned manager tab. |
+| `storage` | Store saved sessions, settings, recovery records, and operation journals locally. |
+| `unlimitedStorage` | Remove Chrome's normal local-storage quota so large saved-tab libraries and recovery records can remain local. |
+| `tabGroups` | Read and recreate Chrome tab-group titles, colors, and collapsed state. |
+| `alarms` | Schedule local Trash cleanup, orphan cleanup, and optional tab-limit checks without a persistent background page. |
+| `favicon` | Display site icons from Chrome's local favicon cache. |
+| `contextMenus` | Provide explicit tab-saving actions in Chrome's context menu. |
 
-Shelf requests **no host permissions** and injects **no content scripts** — it cannot read or change anything on any website you visit.
+## Chrome Web Store Limited Use disclosure
 
-## Data you export
-
-JSON export files are created locally and saved wherever you choose. They are your responsibility to store safely; they contain your saved URLs and titles in plain text.
+Shelf's use of information received from Chrome APIs complies with the Chrome Web Store User Data Policy, including the Limited Use requirements. Shelf limits use of browsing data to providing or improving its single, user-facing tab-management purpose. Shelf does not transfer this data, use it for advertising, or permit humans to read it.
 
 ## Changes
 
-Any future change to this policy will ship with the extension update that implements it, and the changelog will call it out. Features that would transmit data will not be added silently; anything of the sort would be strictly opt-in and off by default.
+If Shelf's data practices change, this policy and the extension's user-facing disclosures will be updated before or with the release that introduces the change. A feature that transmits saved browsing data will not be enabled silently.
 
 ## Contact
 
-Open an issue in the [Shelf repository](https://github.com/mirza-rizvi/shelf/issues). Security vulnerabilities should be reported privately according to the [security policy](../SECURITY.md).
+Open an issue in the [Shelf repository](https://github.com/mirza-rizvi/shelf/issues). Report security vulnerabilities privately according to the [security policy](../SECURITY.md).

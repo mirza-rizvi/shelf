@@ -26,11 +26,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type-check
-        run: npm run compile
-
-      - name: Test
-        run: npm test
-
-      - name: Build production extension
-        run: npm run build
+      - name: Verify release package
+        run: npm run release:check

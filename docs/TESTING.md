@@ -26,7 +26,7 @@
 
 ## Manual browser checklist (before each release)
 
-Load: `npm run build` → `chrome://extensions` → Developer mode → Load unpacked → `dist/chrome-mv3`.
+First run `npm run release:check`. Then load: `chrome://extensions` → Developer mode → Load unpacked → `dist/chrome-mv3`.
 
 ### Cold load
 - [ ] DevTools console on popup + manager: zero errors, zero CSP violations.
@@ -41,7 +41,7 @@ Load: `npm run build` → `chrome://extensions` → Developer mode → Load unpa
 - [ ] Manager header contains only Shelves, Trash, and Settings; Help is included in Settings.
 - [ ] Restore group → order, pinned state, group names/colors identical; entry stays on shelf (default).
 - [ ] Click a single saved tab → it opens AND loads the page (not blank, not unloaded).
-- [ ] Restore a group → tabs open UNLOADED (grey in Chrome Task Manager, ~0 MB each) with correct titles/URLs, and load on first click — never blank.
+- [ ] Restore a group → tabs open UNLOADED to minimize memory use, with correct titles/URLs, and load on first click — never blank.
 - [ ] "Restore groups into a new window" setting → group opens in a fresh window with no leftover blank New Tab; single-tab restore stays in the current window.
 - [ ] "Include pinned tabs when saving a window" off → window/all-window saves skip pinned tabs; "Save this tab" on a pinned tab still saves it.
 - [ ] "Remove tabs from shelf after restoring" setting → restore moves the entry to trash.

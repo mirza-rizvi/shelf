@@ -31,6 +31,7 @@ beforeEach(() => {
   vi.spyOn(chrome.contextMenus.onClicked, 'addListener').mockImplementation(() => {});
   vi.spyOn(chrome.commands.onCommand, 'addListener').mockImplementation(() => {});
   vi.spyOn(chrome.tabs.onAttached, 'addListener').mockImplementation(() => {});
+  vi.spyOn(chrome.storage.local, 'setAccessLevel').mockResolvedValue();
 });
 
 afterEach(() => {
@@ -38,6 +39,14 @@ afterEach(() => {
 });
 
 describe('background listener registration', () => {
+  it('restricts saved data to trusted extension contexts', () => {
+    const setAccessLevel = vi.mocked(chrome.storage.local.setAccessLevel);
+
+    startBackground();
+
+    expect(setAccessLevel).toHaveBeenCalledWith({ accessLevel: 'TRUSTED_CONTEXTS' });
+  });
+
   it('registers tabs.onUpdated without an unsupported event filter', () => {
     const addListener = vi.spyOn(chrome.tabs.onUpdated, 'addListener');
 

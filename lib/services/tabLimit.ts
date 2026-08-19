@@ -156,7 +156,7 @@ async function doRunCheck(): Promise<void> {
 
   try {
     // The limit counts LOADED, saveable tabs only: discarded tabs (lazy-
-    // restored or unloaded by Chrome's memory saver) cost ~0 RAM, and blank/
+    // restored or unloaded by Chrome's memory saver) use minimal memory, and blank/
     // New Tab pages have nothing worth saving — neither is counted or evicted.
     const allTabs = (await chrome.tabs.query({})).filter((t) => !t.discarded && isSaveworthy(t));
 

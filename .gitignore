@@ -9,6 +9,7 @@ test-results/
 
 # Packaged extensions and source maps
 *.zip
+*.sha256
 *.crx
 *.pem
 *.map

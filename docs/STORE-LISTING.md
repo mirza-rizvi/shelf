@@ -1,88 +1,123 @@
-# Chrome Web Store Listing — Shelf
+# Chrome Web Store Listing — Shelf 1.0.0
 
-## Single purpose statement
+This file is the paste-ready source of truth for Shelf's first manual Chrome Web Store submission.
 
-Shelf saves the user's open tabs into a local list and restores them later, to reduce tab clutter. All functionality serves this one purpose.
+## Store listing
 
-## Name / summary
+**Name**
 
-**Shelf — Privacy-First Tab Manager**
-Save open tabs to a private local list and restore them later. No accounts, no cloud, no tracking — your data never leaves this device.
+Shelf — Privacy-First Tab Manager
 
-## Description (draft)
+**Summary**
+
+Save open tabs to a private local list and restore them later. No accounts, no cloud, no tracking — data never leaves this device.
+
+**Category and language**
+
+- Category: Productivity
+- Language: English
+
+**Description**
 
 Too many tabs? Put them on the Shelf.
 
-One click saves your open tabs into a tidy local list and closes them. Restore one tab or one shelf whenever you want.
+Shelf saves the tabs you choose into a simple local list. Restore one tab or a complete session whenever you need it.
 
-WHY SHELF IS DIFFERENT
+PRIVATE BY DESIGN
 
-🔒 Actually private. Zero network requests — verify it yourself in DevTools. No account, no cloud, no analytics, no ads. Your URLs never leave your device. Even site icons come from Chrome's local cache.
+Saved URLs, titles, tab metadata, settings, and Trash stay in Chrome's local extension storage on your device. Shelf has no account, cloud service, analytics, ads, or telemetry and makes no external requests. Favicons come from Chrome's local cache.
 
-🛟 Built so you don't lose your tabs. Shelf writes and verifies your data BEFORE closing anything. Every delete goes to a trash you can undo for 30 days. Full JSON export any time.
+RELIABLE SAVING AND RECOVERY
 
-✨ Deliberately simple. Save a window, find it with search, restore it. Restoring keeps your saved copy by default.
+Shelf writes and verifies saved data before closing a tab. Deleted tabs and sessions remain recoverable in local Trash for 30 days. Export a versioned JSON backup whenever you want.
 
-🗂 Keeps your tab groups. Chrome tab-group names and colors are saved and restored intact.
+ESSENTIAL TAB MANAGEMENT
 
-🪶 Light on memory. Restoring a shelf opens its tabs unloaded — zero RAM until you actually click them.
+Save one tab, highlighted tabs, a Chrome tab group, one window, or all windows. Search saved sessions, restore individual tabs or complete sessions, preserve Chrome tab groups, remove duplicate URLs, and import an existing OneTab export.
 
-⚖️ Optional tab limit. Set a maximum per window (say 25); Shelf quietly moves the oldest overflow tabs to your shelf — never your active tab, pinned tabs, tabs playing audio, or unloaded tabs.
+LIGHTWEIGHT RESTORE
 
-↪️ Switching from OneTab? Import your OneTab export from Settings.
+Complete sessions restore with tabs unloaded to minimize memory use until opened. Restoring keeps the saved copy by default.
 
-Note: Shelf keeps a small pinned "Shelf" tab at the left of your tab strip (like OneTab's tab). That tab IS the extension — it re-pins itself and comes back if you close it (closing the window still closes the window), so your saved tabs are always one click away.
+OPTIONAL TAB LIMIT
 
-## Permission justifications (dashboard privacy tab)
+If enabled, Shelf moves the oldest eligible overflow tabs into a saved session. It excludes the active tab, pinned tabs, tabs playing audio, and tabs that are already unloaded.
 
-| Permission | Justification (one sentence each) |
+PINNED MANAGER TAB
+
+Shelf keeps one small manager tab pinned at the left of the tab strip so saved tabs stay one click away. It re-pins itself and returns if closed, but closing its containing window still closes that window normally.
+
+## URLs
+
+- Website: https://github.com/mirza-rizvi/shelf
+- Support: https://github.com/mirza-rizvi/shelf/issues
+- Privacy policy: https://github.com/mirza-rizvi/shelf/blob/main/docs/PRIVACY.md
+
+## Privacy dashboard
+
+**Single purpose**
+
+Shelf saves tabs selected by the user into a private local list and restores them later. Its organization, search, duplicate cleanup, recovery, backup, and optional tab-limit features directly support that tab-management purpose.
+
+**Permission justifications**
+
+| Permission | Dashboard justification |
 |---|---|
-| `tabs` | Required to read the titles and URLs of open tabs so the user can save them to their local list; this is the extension's core function. |
-| `storage` | Stores the user's saved tabs and settings locally on their device. |
-| `unlimitedStorage` | Users save thousands of tabs; the default 10 MB quota is insufficient and this also prevents eviction of user data. |
-| `tabGroups` | Reads and recreates tab-group titles/colors so saved groups restore exactly as they were. |
-| `alarms` | Schedules trash cleanup and tab-limit checks in the MV3 service worker. |
-| `favicon` | Displays site icons from Chrome's local favicon cache, avoiding any network request to fetch icons. |
-| `contextMenus` | Adds explicit save actions to Chrome's context menu so the user can choose what to save. |
+| `tabs` | Reads the URLs, titles, pinned state, and grouping of tabs the user saves; closes tabs after a verified save; restores saved tabs; and maintains the disclosed pinned Shelf manager tab. |
+| `storage` | Stores saved sessions, settings, Trash records, and crash-recovery journals locally on the user's device. |
+| `unlimitedStorage` | Removes Chrome's normal local-storage quota so large saved-tab libraries and recovery records can remain on the user's device. |
+| `tabGroups` | Reads and recreates Chrome tab-group titles, colors, and collapsed state when saving and restoring sessions. |
+| `alarms` | Schedules local Trash cleanup, orphan cleanup, and optional tab-limit checks in the Manifest V3 service worker. |
+| `favicon` | Displays site icons from Chrome's local favicon cache without contacting a website or favicon service. |
+| `contextMenus` | Adds explicit tab-saving actions to Chrome's context menu. |
 
-## Data-use disclosures
+**Data-use answers**
 
-- ☑ Web history (tab URLs and titles) — **processed and stored locally on the user's device only; never transmitted.**
-- Certify all three: not sold to third parties; not used/transferred for purposes unrelated to the single purpose; not used for creditworthiness/lending.
-- Remote code: **No.**
-- Privacy policy URL: host `docs/PRIVACY.md` (e.g., GitHub Pages) and link it.
+- Data category: Web history — saved tab URLs and titles.
+- Handling: processed and stored locally on the user's device; never transmitted to the developer or a third party.
+- Remote code: No.
+- Certify that data is not sold or transferred, is not used for an unrelated purpose, is not used for creditworthiness or lending, and complies with the Limited Use requirements.
+- Confirm that these answers exactly match `docs/PRIVACY.md` before every submission.
 
-## Assets checklist
+## Assets
 
-- Icons 16/32/48/128 (shipped in `public/icon/`).
-- Screenshots 1280×800: manager with shelves (light + dark), settings (tab limit expanded) — three shots, regenerated by `scripts/screenshots.mjs`. (The old onboarding shot is gone — that page was removed in v0.3.)
-- Category: Productivity → Workflow. Language: English.
+Upload:
 
-## Packaging
+- `public/icon/128.png` as the 128×128 store icon;
+- `store-assets/1-manager-light.png` at 1280×800;
+- `store-assets/2-manager-dark.png` at 1280×800;
+- `store-assets/3-settings.png` at 1280×800; and
+- `store-assets/promo-tile-440x280.png` as the 440×280 small promo tile.
 
-`npm run zip` → upload `dist/shelf-<version>-chrome.zip`. Inspect first: `unzip -l` — no `.map`, no `node_modules`, no dotfiles.
+Regenerate screenshots after any visible UI change:
 
-## Submission walkthrough (step by step)
+```bash
+npm run build
+node scripts/screenshots.mjs
+```
 
-Prereqs done in repo: zip at `dist/shelf-<version>-chrome.zip`; screenshots + promo tile in `store-assets/` (regenerate any time: `npm run build && node scripts/screenshots.mjs`).
+## Release package
 
-1. **Host the privacy policy** (required, user action): use the permanent GitHub URL for `docs/PRIVACY.md`, or enable GitHub Pages and use its published URL. Keep the URL stable.
-2. **Developer account**: https://chrome.google.com/webstore/devconsole → register ($5 one-time). Turn on 2FA (ideally a hardware key — extension-developer accounts are actively phished; see THREAT-MODEL.md T4).
-3. **New item** → upload `dist/shelf-<version>-chrome.zip`.
-4. **Store listing tab**: name, summary, description (top of this file); category Productivity → Workflow; language English; upload the three `store-assets/*.png` screenshots + `promo-tile-440x280.png`.
-5. **Privacy tab**:
-   - Single purpose: paste the statement above.
-   - Permission justifications: paste the table rows above, one per field.
-   - Data usage: check **only** "Web history"; check all three certifications (not sold / not unrelated / not creditworthiness).
-   - Remote code: **No**.
-   - Privacy policy URL: from step 1.
-6. **Distribution tab**: Public; all regions.
-7. **Submit for review.** Expected: days, not weeks (no host permissions, no remote code, no content scripts). If rejected, the email cites the exact policy — fix and resubmit; do not argue in the resubmission notes.
-8. **After approval**: verify the live listing shows "This developer declares that your data is not being sold…" block; install from the store and re-run the smoke test in `docs/TESTING.md`.
+Run the complete release gate:
 
-Version bumps: edit `package.json` `version`, `npm run zip`, upload the new zip — Chrome auto-updates users within hours.
+```bash
+npm ci
+npm run release:check
+```
 
-## Review-friction notes
+Upload `dist/shelf-1.0.0-chrome.zip`. The release verifier checks the manifest, permissions, CSP, assets, bundled code, ZIP layout, and checksum. Chrome requires `manifest.json` at the root of the ZIP.
 
-- No host permissions, no content scripts, no remote code → fast-path review profile.
-- The `tabs` warning ("Read your browsing history") is unavoidable for this category; the listing copy and privacy policy address it head-on.
+## Manual first-submission checklist
+
+1. Register at the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole), accept the agreement, and pay the one-time registration fee.
+2. Complete the developer profile, verify the contact email, and enable two-step verification.
+3. Run `npm ci` and `npm run release:check` from a clean checkout.
+4. Load `dist/chrome-mv3` unpacked in Chrome 121 or newer and complete `docs/TESTING.md`.
+5. Create a new dashboard item and upload `dist/shelf-1.0.0-chrome.zip`.
+6. Paste the listing text, single-purpose statement, permission justifications, data-use answers, and exact URLs from this document.
+7. Upload the icon, three screenshots, and promo tile listed above.
+8. Set distribution to Public, all regions, free, and no in-app purchases.
+9. Review the dashboard preview for accuracy and submit it for review. Review timing varies; check the dashboard for status or requested changes.
+10. After approval, install the public store build and repeat the core smoke test.
+
+Chrome requires each later uploaded package version to be greater than the previous version. For updates, change `package.json` first and rerun `npm run release:check`.

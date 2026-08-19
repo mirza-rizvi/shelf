@@ -44,6 +44,7 @@ npm test          # automated tests
 npm run build     # production extension
 npm run zip       # Chrome Web Store archive
 npm run check     # compile, test, and production build
+npm run release:check # full store-release gate + ZIP checksum
 ```
 
 The implementation deliberately avoids extra infrastructure: no backend, account, telemetry SDK, content script, host permission, or cloud-sync code. React-compatible source is bundled against Preact to keep the pinned manager lightweight.

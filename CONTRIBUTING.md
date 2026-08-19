@@ -19,6 +19,8 @@ Before submitting a change, run:
 npm run check
 ```
 
+Before preparing a Chrome Web Store package, run `npm run release:check`.
+
 ## Contribution guidelines
 
 - Keep all saved browsing data local unless a future feature is explicitly opt-in and locally encrypted.

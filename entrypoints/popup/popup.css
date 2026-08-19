@@ -41,6 +41,13 @@ body {
 .popup-field select { width: 100%; min-width: 0; padding: 5px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .popup-check { display: flex; gap: 7px; align-items: center; font-size: 12.5px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 9px; }
 
+.popup-privacy {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
 .popup-stats {
   display: flex;
   justify-content: space-between;

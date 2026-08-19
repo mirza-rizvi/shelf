@@ -83,6 +83,7 @@ function PopupInner() {
         <input type="checkbox" checked={closeOriginals} onChange={(e) => setCloseOriginals(e.target.checked)} />
         Close tabs after verified save
       </label>
+      <p className="popup-privacy">Shelf stores the URLs and titles you save locally on this device.</p>
     </div>
   );
 }

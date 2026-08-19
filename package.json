@@ -31,6 +31,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run compile && npm test && npm run build",
+    "release:check": "npm run check && npm audit --audit-level=high && npm run zip && node scripts/verify-release.mjs",
     "postinstall": "wxt prepare"
   },
   "dependencies": {

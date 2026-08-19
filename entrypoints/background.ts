@@ -40,6 +40,13 @@ export default defineBackground(() => {
     void task.catch(() => {});
   }
 
+  // chrome.storage.local is exposed to content scripts by default. Shelf has
+  // no content scripts, but lock the store to extension pages + this service
+  // worker so a future content script cannot inherit access to saved URLs.
+  runInBackground(
+    chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }),
+  );
+
   function installContextMenus(): Promise<void> {
     return chrome.contextMenus.removeAll().then(() => {
       for (const [id, title] of MENU_SCOPES) chrome.contextMenus.create({ id, title, contexts: ['action', 'page'] });

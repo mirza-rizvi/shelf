@@ -184,7 +184,7 @@ export function SettingsPage({ data }: { data: ShelfData }) {
           />
         </div>
         <p className="field-hint">
-          Restoring a shelf opens its tabs unloaded — they use no memory until you click them.
+          Restoring a shelf keeps its tabs unloaded to minimize memory use until you click them.
         </p>
       </section>
 
@@ -244,9 +244,10 @@ export function SettingsPage({ data }: { data: ShelfData }) {
       <section aria-labelledby="s-privacy">
         <h2 id="s-privacy">Privacy</h2>
         <p className="field-hint">
-          Shelf stores everything locally on this device. It makes no network requests, has no
-          analytics, and requires no account. Uninstalling the extension deletes its data —
-          export a JSON file first if you want to keep it.
+          Shelf stores saved tab URLs, titles, tab metadata, settings, and Trash locally on this
+          device. It makes no network requests, has no analytics, and requires no account.
+          Uninstalling the extension deletes its data — export a JSON file first if you want to
+          keep it.
         </p>
         <p className="field-hint">
           Last full export: {settings.lastExportAt ? new Date(settings.lastExportAt).toLocaleString() : 'Never'}.

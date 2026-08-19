@@ -7,6 +7,8 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 ### Added
 
 - Added a recoverable **Delete all** action with an in-extension confirmation modal showing the affected session and tab counts.
+- Added a dependency-free Chrome Web Store release verifier shared by local development and CI.
+- Restricted local extension storage to trusted extension contexts.
 
 ### Changed
 
@@ -14,6 +16,7 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 - Moved JSON backup, Shelf/OneTab import, duplicate cleanup, privacy information, and help into Settings.
 - Reduced session and tab actions to restore and recoverable delete.
 - Added a verified schema-v4 migration that safely flattens existing workspace-aware data.
+- Clarified local browsing-data handling in the popup, privacy policy, and store listing.
 
 ### Removed
 
