@@ -4,19 +4,26 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import type { SavedGroup } from '../lib/types';
 import { GroupCard } from './GroupCard';
 
+const CREATED_AT = Date.UTC(2026, 0, 5);
+const UPDATED_AT = Date.UTC(2026, 7, 1);
+const SAVED_AT = Date.UTC(2026, 7, 1);
+
+// Same options as lib/dates.ts, so assertions hold in any test-runner locale.
+const dateFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
 function makeGroup(urls: string[]): SavedGroup {
   return {
     id: 'g1',
     name: 'Shelf one',
-    createdAt: 1,
-    updatedAt: 1,
+    createdAt: CREATED_AT,
+    updatedAt: UPDATED_AT,
     chromeGroups: [],
     tabs: urls.map((url, i) => ({
       id: `t${i}`,
       url,
       title: `Title ${i}`,
       pinned: false,
-      savedAt: 1,
+      savedAt: SAVED_AT,
       chromeGroupIdx: null,
     })),
   };
@@ -30,7 +37,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('GroupCard rendering', () => {
-  it('renders a row per tab with its hostname', () => {
+  it('renders a row per tab with its full URL', () => {
     render(
       <GroupCard
         group={makeGroup(['https://a.example.com/x', 'https://b.example.com/y'])}
@@ -38,8 +45,8 @@ describe('GroupCard rendering', () => {
     );
 
     expect(document.querySelectorAll('.tab-row')).toHaveLength(2);
-    expect(screen.getByText('a.example.com')).toBeDefined();
-    expect(screen.getByText('b.example.com')).toBeDefined();
+    expect(screen.getByText('https://a.example.com/x')).toBeDefined();
+    expect(screen.getByText('https://b.example.com/y')).toBeDefined();
   });
 
   it('marks unrestorable URLs blocked (copy-only)', () => {
@@ -85,11 +92,31 @@ describe('GroupCard rendering', () => {
     expect(document.querySelectorAll('.tab-row')).toHaveLength(0);
   });
 
-  it('uses one fixed row layout with the full URL available on hover', () => {
+  it('shows the full URL on its own line and as a hover title', () => {
     const group = makeGroup(['https://example.com/full/path']);
     render(<GroupCard group={group} />);
-    expect(document.querySelector('.tab-url')).toBeNull();
+    expect(document.querySelector('.tab-url')?.textContent).toBe('https://example.com/full/path');
     expect(document.querySelector('.tab-info')?.getAttribute('title')).toBe('https://example.com/full/path');
+  });
+
+  it('shows the saved date on each row', () => {
+    render(<GroupCard group={makeGroup(['https://a.example.com/x'])} />);
+    expect(document.querySelector('.tab-date')?.textContent).toBe(dateFmt.format(SAVED_AT));
+  });
+
+  it('shows created and updated dates in the header', () => {
+    render(<GroupCard group={makeGroup(['https://a.example.com/x'])} />);
+    expect(document.querySelector('.group-dates')?.textContent).toBe(
+      `created ${dateFmt.format(CREATED_AT)} · updated ${dateFmt.format(UPDATED_AT)}`,
+    );
+  });
+
+  it('shows only the created date when the list was never updated after creation', () => {
+    const group = { ...makeGroup(['https://a.example.com/x']), updatedAt: CREATED_AT };
+    render(<GroupCard group={group} />);
+    expect(document.querySelector('.group-dates')?.textContent).toBe(
+      `created ${dateFmt.format(CREATED_AT)}`,
+    );
   });
 
   it('shows only restore and recoverable delete actions, with no selection or drag UI', () => {

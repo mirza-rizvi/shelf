@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 import type { SavedGroup, TabItem } from '../lib/types';
 import { urlInfo } from '../lib/urls';
+import { formatDate, formatDateTime } from '../lib/dates';
 import { sendCmd } from '../lib/messaging';
 import { Favicon } from './Favicon';
 import { useOnScreen } from './useOnScreen';
@@ -11,6 +12,9 @@ const GROUP_COLOR_HEX: Record<string, string> = {
   green: '#188038', pink: '#d01884', purple: '#a142f4', cyan: '#007b83', orange: '#fa903e',
 };
 const MAX_ROWS_PER_CARD = 300;
+// Must match `.tab-row { min-height }` in entrypoints/manager/manager.css, or
+// offscreen spacer height drifts and the list jumps on scroll.
+const ROW_HEIGHT_PX = 48;
 
 export interface GroupCardProps {
   group: SavedGroup;
@@ -75,6 +79,14 @@ export const GroupCard = memo(function GroupCard({
             ? `${group.tabs.length} tab${group.tabs.length === 1 ? '' : 's'}`
             : `${tabs.length} of ${group.tabs.length}`}
         </span>
+        <span
+          className="group-dates"
+          title={`Created ${formatDateTime(group.createdAt)} · Updated ${formatDateTime(group.updatedAt)}`}
+        >
+          {formatDate(group.createdAt) === formatDate(group.updatedAt)
+            ? `created ${formatDate(group.createdAt)}`
+            : `created ${formatDate(group.createdAt)} · updated ${formatDate(group.updatedAt)}`}
+        </span>
         <button className="btn btn-sm" onClick={restoreGroup}>Restore</button>
         <button className="btn-ghost btn-sm btn-danger" onClick={deleteGroup}>Delete</button>
       </div>
@@ -107,14 +119,14 @@ export const GroupCard = memo(function GroupCard({
           ) : null}
         </>
       ) : null}
-      {!collapsed && !onScreen ? <ul className="tab-rows" style={{ height: tabs.length * 38 }} /> : null}
+      {!collapsed && !onScreen ? <ul className="tab-rows" style={{ height: tabs.length * ROW_HEIGHT_PX }} /> : null}
     </article>
   );
 });
 
 const TabRow = memo(function TabRow({ tab, groupId }: { tab: TabItem; groupId: string }) {
   const toast = useToast();
-  const { host, blocked } = urlInfo(tab.url);
+  const { blocked } = urlInfo(tab.url);
 
   const restore = () => {
     if (blocked) {
@@ -141,9 +153,10 @@ const TabRow = memo(function TabRow({ tab, groupId }: { tab: TabItem; groupId: s
       <Favicon url={tab.url} />
       <div className="tab-info" title={tab.url}>
         <span className="tab-title">{tab.title}</span>
+        <span className="tab-url">{tab.url}</span>
       </div>
       {tab.pinned ? <span className="pin-badge">pinned</span> : null}
-      {host ? <span className="tab-host">{host}</span> : null}
+      <span className="tab-date" title={formatDateTime(tab.savedAt)}>{formatDate(tab.savedAt)}</span>
       <button className="btn-ghost btn-sm row-restore" onClick={restore}>
         {blocked ? 'Copy URL' : 'Restore'}
       </button>

@@ -1,5 +1,5 @@
 .manager {
-  max-width: 860px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 20px 16px 80px;
 }
@@ -98,7 +98,7 @@
   overflow: visible;
   /* Offscreen cards skip layout/paint entirely — keeps a 2,000-tab list cheap. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 200px;
+  contain-intrinsic-size: auto 260px;
 }
 .group-header {
   display: flex;
@@ -123,6 +123,13 @@
   color: var(--text-muted);
   font-size: 12.5px;
   white-space: nowrap;
+}
+.group-header .group-dates {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chrome-group-badges {
   display: flex;
@@ -170,8 +177,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 20px;
 }
-.tab-row .tab-host {
+.tab-row .tab-url {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-row .tab-date {
   color: var(--text-muted);
   font-size: 12px;
   white-space: nowrap;
@@ -182,14 +198,16 @@
   font-size: 11px;
   color: var(--text-muted);
 }
-.tab-row { min-height: 36px; }
+/* Must match ROW_HEIGHT_PX in components/GroupCard.tsx (offscreen spacer). */
+.tab-row { min-height: 48px; }
 
 @media (max-width: 720px) {
   .manager { padding-left: 10px; padding-right: 10px; }
   .manager-header { align-items: flex-start; }
   .manager-header, .group-header { flex-wrap: wrap; }
   .group-header .group-name { min-width: 160px; }
-  .tab-row .tab-host { display: none; }
+  .tab-row .tab-date { display: none; }
+  .group-header .group-dates { display: none; }
 }
 .tab-row.blocked .tab-title {
   color: var(--text-muted);
