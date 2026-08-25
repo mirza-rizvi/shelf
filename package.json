@@ -48,7 +48,7 @@
     "jsdom": "27.2.0",
     "playwright-core": "^1.62.1",
     "typescript": "~5.9.0",
-    "vitest": "4.1.10",
+    "vitest": "4.1.11",
     "wxt": "0.21.3"
   },
   "overrides": {
