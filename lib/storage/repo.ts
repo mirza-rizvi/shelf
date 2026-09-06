@@ -252,6 +252,9 @@ export async function getSettings(): Promise<Settings> {
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
+    // Exact-value guard: stored casts hide runtime garbage, so only the literal
+    // 'vertical' survives; missing/unknown values fall back to 'horizontal'.
+    tabStripLayout: stored?.tabStripLayout === 'vertical' ? 'vertical' : 'horizontal',
     tabLimit: { ...DEFAULT_SETTINGS.tabLimit, ...stored?.tabLimit },
   };
 }

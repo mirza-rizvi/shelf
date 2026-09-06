@@ -123,6 +123,23 @@ export function SettingsPage({ data }: { data: ShelfData }) {
         </div>
         <div className="field">
           <div className="field-label">
+            <label htmlFor="tab-layout">Tab layout</label>
+            <span className="field-hint" id="tab-layout-hint">
+              Chrome does not let extensions detect this automatically.
+            </span>
+          </div>
+          <select
+            id="tab-layout"
+            value={settings.tabStripLayout}
+            aria-describedby="tab-layout-hint"
+            onChange={(e) => save({ tabStripLayout: e.target.value as Settings['tabStripLayout'] })}
+          >
+            <option value="horizontal">Horizontal (left/right)</option>
+            <option value="vertical">Vertical (above/below)</option>
+          </select>
+        </div>
+        <div className="field">
+          <div className="field-label">
             <label htmlFor="capture-close">Close tabs after saving</label>
             <span className="field-hint">Tabs close only after the local write has been verified.</span>
           </div>
@@ -171,8 +188,10 @@ export function SettingsPage({ data }: { data: ShelfData }) {
           <div className="field-label">
             <label htmlFor="save-pinned">Include pinned tabs when saving a window</label>
             <span className="field-hint" id="save-pinned-hint">
-              Off (default): window and all-window saves leave pinned tabs open. Left/right
-              saves always skip pinned tabs.
+              Off (default): window and all-window saves leave pinned tabs open.{' '}
+              {settings.tabStripLayout === 'vertical'
+                ? 'Above/below saves always skip pinned tabs.'
+                : 'Left/right saves always skip pinned tabs.'}
             </span>
           </div>
           <input

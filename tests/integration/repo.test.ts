@@ -121,5 +121,13 @@ describe('repo sharding', () => {
     expect(s.tabLimit.enabled).toBe(true);
     expect(s.tabLimit.maxTabs).toBe(25); // default filled in
     expect(s.restoreRemovesFromList).toBe(false);
+    expect(s.tabStripLayout).toBe('horizontal'); // default filled in
+  });
+
+  it('settings merge normalizes an unrecognized tabStripLayout to horizontal', async () => {
+    await chrome.storage.local.set({ settings: { theme: 'dark', tabStripLayout: 'diagonal' } });
+    const s = await repo.getSettings();
+    expect(s.tabStripLayout).toBe('horizontal');
+    expect(s.theme).toBe('dark'); // rest of the stored settings still honored
   });
 });

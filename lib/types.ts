@@ -51,6 +51,8 @@ export interface TabLimitSettings {
 
 export interface Settings {
   theme: 'system' | 'light' | 'dark';
+  /** Layout of Chrome's native tab strip; drives directional popup copy (above/below vs left/right). Chrome does not expose the real orientation. */
+  tabStripLayout: 'horizontal' | 'vertical';
   /** false (default): restoring keeps the entry on the shelf. */
   restoreRemovesFromList: boolean;
   /** false (default): window/all-window saves leave pinned tabs alone. */

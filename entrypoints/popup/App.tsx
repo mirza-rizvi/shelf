@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
+import { DEFAULT_SETTINGS } from '../../lib/constants';
 import { ToastProvider, useToast } from '../../components/Toast';
 import type { CaptureScope } from '../../lib/services/capture';
 import { sendCmd } from '../../lib/messaging';
 import * as repo from '../../lib/storage/repo';
 import type { SavedGroup } from '../../lib/types';
 
-const SAVE_ACTIONS: { scope: CaptureScope; label: string }[] = [
+const SAVE_ACTIONS: { scope: CaptureScope; label: string; verticalLabel?: string }[] = [
   { scope: 'tab', label: 'Save this tab' },
-  { scope: 'left', label: 'Save tabs to the left' },
-  { scope: 'right', label: 'Save tabs to the right' },
+  // Vertical layouts keep the same capture semantics: 'above' = earlier tab
+  // index (scope 'left'), 'below' = later tab index (scope 'right').
+  { scope: 'left', label: 'Save tabs to the left', verticalLabel: 'Save tabs above' },
+  { scope: 'right', label: 'Save tabs to the right', verticalLabel: 'Save tabs below' },
   { scope: 'window', label: 'Save this window' },
   { scope: 'selected', label: 'Save highlighted tabs' },
   { scope: 'group', label: 'Save active tab group' },
@@ -22,6 +25,7 @@ function PopupInner() {
   const [closeOriginals, setCloseOriginals] = useState(true);
   const [destinationGroupId, setDestinationGroupId] = useState('');
   const [groups, setGroups] = useState<SavedGroup[]>([]);
+  const [tabStripLayout, setTabStripLayout] = useState(DEFAULT_SETTINGS.tabStripLayout);
 
   useEffect(() => {
     void repo.ensureReady().then(async () => {
@@ -29,6 +33,7 @@ function PopupInner() {
         repo.getSettings(), repo.getAllGroups(),
       ]);
       setCloseOriginals(settings.captureClosesTabs);
+      setTabStripLayout(settings.tabStripLayout);
       setGroups(savedGroups);
     });
   }, []);
@@ -58,9 +63,9 @@ function PopupInner() {
       </div>
 
       <div className="popup-actions">
-        {SAVE_ACTIONS.slice(0, 4).map(({ scope, label }) => (
+        {SAVE_ACTIONS.slice(0, 4).map(({ scope, label, verticalLabel }) => (
           <button key={scope} className="btn" disabled={busy} onClick={() => save(scope)}>
-            {label}
+            {tabStripLayout === 'vertical' && verticalLabel ? verticalLabel : label}
           </button>
         ))}
       </div>

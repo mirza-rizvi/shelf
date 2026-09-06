@@ -35,6 +35,7 @@ function currentSettings(value: unknown): Settings {
       ? stored['excludedDomains'].filter((item): item is string => typeof item === 'string')
       : [],
     ...(lastExportAt === undefined ? {} : { lastExportAt }),
+    tabStripLayout: stored['tabStripLayout'] === 'vertical' ? 'vertical' : 'horizontal',
     tabLimit: { enabled: limit['enabled'] === true, maxTabs },
   };
 }

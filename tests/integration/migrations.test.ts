@@ -101,6 +101,7 @@ describe('v1 -> current migration', () => {
       'savePinnedTabs',
       'skipDuplicatesOnSave',
       'tabLimit',
+      'tabStripLayout',
       'theme',
     ]);
     expect(Object.keys(s.tabLimit as object).sort()).toEqual(['enabled', 'maxTabs']);
@@ -144,6 +145,7 @@ describe('v1 -> current migration', () => {
       captureClosesTabs: true,
       skipDuplicatesOnSave: true,
       excludedDomains: [],
+      tabStripLayout: 'horizontal',
       tabLimit: { enabled: false, maxTabs: 25 },
     });
   });
@@ -232,6 +234,7 @@ describe('v3 -> v4 flat-session migration', () => {
       skipDuplicatesOnSave: false,
       excludedDomains: ['mail.example'],
       lastExportAt: 77,
+      tabStripLayout: 'horizontal',
       tabLimit: { enabled: true, maxTabs: 44 },
     });
   });

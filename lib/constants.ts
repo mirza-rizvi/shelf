@@ -2,6 +2,7 @@ import type { Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
+  tabStripLayout: 'horizontal',
   restoreRemovesFromList: false,
   savePinnedTabs: false, // OneTab-style: window saves leave pinned tabs alone
   restoreInNewWindow: false,
