@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import type { SavedGroup } from '../lib/types';
+import type { SavedGroup, TrashEntry } from '../lib/types';
 import { DEFAULT_SETTINGS } from '../lib/constants';
 import * as repo from '../lib/storage/repo';
 import * as journal from '../lib/services/journal';
@@ -140,6 +140,45 @@ describe('useStorageData', () => {
     const allSpy = vi.spyOn(repo, 'getAllGroups');
     await chrome.storage.local.set({ somethingNew: 1 });
 
+    await waitFor(() => expect(allSpy).toHaveBeenCalled());
+  });
+
+  it('applies batched trash add/update/delete/reorder changes incrementally', async () => {
+    await seed(makeGroup('a', ['https://a.com/']));
+    const { result } = renderHook(() => useStorageData());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // Pre-existing trash so untouched entries can keep their identity.
+    const untouched: TrashEntry = {
+      id: 'keep', deletedAt: 1, kind: 'group', group: makeGroup('gone', ['https://gone.com/']),
+    };
+    await repo.putTrashEntry(untouched);
+    await waitFor(() => expect(result.current.trash.map((t) => t.id)).toEqual(['keep']));
+    const untouchedRef = result.current.trash[0]!;
+
+    const added: TrashEntry = {
+      id: 'x1', deletedAt: 2, kind: 'tab', group: makeGroup('x1g', ['https://x1.com/']),
+    };
+    const updated: TrashEntry = { ...untouched, deletedAt: 99 };
+    // One coalesced batch: shard writes + a reorder that drops nothing.
+    await chrome.storage.local.set({ 'trash:x1': added, 'trash:keep': updated });
+    await repo.setTrashIndex({ order: ['x1', 'keep'] });
+
+    await waitFor(() => expect(result.current.trash.map((t) => t.id)).toEqual(['x1', 'keep']));
+    // The batch's own newValue carries the update; untouched objects keep identity.
+    expect(result.current.trash.find((t) => t.id === 'keep')!.deletedAt).toBe(99);
+    const afterAdd = result.current.trash.find((t) => t.id === 'x1');
+    expect(afterAdd).toBeDefined();
+
+    // Deletion via index removal with a coalesced shard clear.
+    await repo.setTrashIndex({ order: ['keep'] });
+    await chrome.storage.local.remove('trash:x1');
+    await waitFor(() => expect(result.current.trash.map((t) => t.id)).toEqual(['keep']));
+    expect(result.current.trash[0]).not.toBe(untouchedRef); // it was replaced by the update
+
+    // Full refresh fallback still exists for an unknown key.
+    const allSpy = vi.spyOn(repo, 'getAllGroups');
+    await chrome.storage.local.set({ somethingNew: 1 });
     await waitFor(() => expect(allSpy).toHaveBeenCalled());
   });
 });

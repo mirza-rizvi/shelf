@@ -21,7 +21,7 @@ export interface GroupCardProps {
   tabs?: TabItem[];
   collapsed?: boolean;
   removeAfterRestore?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
+  onCollapsedChange?: (groupId: string, collapsed: boolean) => void;
 }
 
 export const GroupCard = memo(function GroupCard({
@@ -40,8 +40,8 @@ export const GroupCard = memo(function GroupCard({
   const mountedTabs = useMemo(() => capped ? tabs.slice(0, MAX_ROWS_PER_CARD) : tabs, [capped, tabs]);
 
   const setCollapsed = (next: boolean) => {
-    setLocalCollapsed(next);
-    onCollapsedChange?.(next);
+    if (controlledCollapsed === undefined) setLocalCollapsed(next);
+    onCollapsedChange?.(group.id, next);
   };
 
   const restoreGroup = () => {

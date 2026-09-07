@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import type { SavedGroup } from '../../lib/types';
+import type { SavedGroup, TrashEntry } from '../../lib/types';
 import * as repo from '../../lib/storage/repo';
-import { groupKey, KEY_INDEX } from '../../lib/storage/keys';
+import { groupKey, KEY_INDEX, KEY_TRASH_INDEX, trashKey } from '../../lib/storage/keys';
 
 function makeGroup(id: string, urls: string[]): SavedGroup {
   return {
@@ -129,5 +129,50 @@ describe('repo sharding', () => {
     const s = await repo.getSettings();
     expect(s.tabStripLayout).toBe('horizontal');
     expect(s.theme).toBe('dark'); // rest of the stored settings still honored
+  });
+
+  it('putGroups and deleteGroups batch without losing unrelated entries', async () => {
+    await repo.putGroupVerified(makeGroup('keep', ['https://keep.com']));
+    await repo.addGroupToIndex('keep', 'end');
+    const batch = [makeGroup('b1', ['https://b1.com']), makeGroup('b2', ['https://b2.com'])];
+    await repo.putGroups(batch);
+    await repo.addGroupsToIndex(batch.map((g) => g.id), 'end');
+    expect((await repo.getIndex()).groupOrder).toEqual(['keep', 'b1', 'b2']);
+
+    await repo.deleteGroups(['b1', 'b2']);
+    expect((await repo.getIndex()).groupOrder).toEqual(['keep']);
+    expect(await repo.getGroup('b1')).toBeNull();
+    expect(await repo.getGroup('b2')).toBeNull();
+    expect(await repo.getGroup('keep')).not.toBeNull();
+    // Empty inputs are no-ops.
+    await repo.putGroups([]);
+    await repo.deleteGroups([]);
+    expect((await repo.getIndex()).groupOrder).toEqual(['keep']);
+  });
+
+  it('putTrashEntries and deleteTrashEntries preserve trash order and unrelated ids', async () => {
+    const entry = (id: string): TrashEntry => ({
+      id, deletedAt: 1, kind: 'group',
+      group: makeGroup(id, ['https://a.com']),
+    });
+    await repo.putTrashEntry(entry('old'));
+    await repo.putTrashEntries([entry('n1'), entry('n2'), entry('old')]);
+    // Newest first; re-putting an existing id does not reorder it.
+    expect((await repo.getTrashIndex()).order).toEqual(['n2', 'n1', 'old']);
+
+    await repo.deleteTrashEntries(['n1']);
+    expect((await repo.getTrashIndex()).order).toEqual(['n2', 'old']);
+    expect(await repo.getTrashEntry('n1')).toBeNull();
+    // Indexed single fetch ignores shards the index no longer references.
+    expect((await repo.getTrashEntry('n2'))!.id).toBe('n2');
+    await repo.deleteTrashEntries([]);
+    expect((await repo.getTrashIndex()).order).toEqual(['n2', 'old']);
+    expect((await repo.getTrashEntriesByIds(['n2', 'old', 'ghost'])).size).toBe(2);
+    // Orphan shards are never served through the indexed fetch.
+    await chrome.storage.local.set({ [trashKey('ghost')]: entry('ghost') });
+    expect(await repo.getTrashEntry('ghost')).toBeNull();
+    // getTrashEntriesByIds is a plain batched shard read (the caller owns
+    // index gating), so an existing-but-unindexed shard still comes back.
+    expect((await repo.getTrashEntriesByIds(['ghost'])).size).toBe(1);
   });
 });

@@ -298,6 +298,9 @@
   align-items: center;
   gap: 10px;
   justify-content: space-between;
+  /* Offscreen rows skip layout/paint — mirrors .group-card containment. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 60px;
 }
 .trash-entry .info {
   min-width: 0;

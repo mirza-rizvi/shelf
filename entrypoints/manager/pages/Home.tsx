@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { GroupCard } from '../../../components/GroupCard';
 import { LoadError } from '../../../components/LoadError';
@@ -17,7 +17,19 @@ export function Home({ data }: { data: ShelfData }) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
-  const savedTabCount = groups.reduce((count, group) => count + group.tabs.length, 0);
+  const savedTabCount = useMemo(
+    () => groups.reduce((count, group) => count + group.tabs.length, 0),
+    [groups],
+  );
+  const handleCollapsedChange = useCallback((groupId: string, collapsed: boolean): void => {
+    setCollapsedGroupIds((current) => {
+      if (current.has(groupId) === collapsed) return current;
+      const next = new Set(current);
+      if (collapsed) next.add(groupId);
+      else next.delete(groupId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -125,11 +137,7 @@ export function Home({ data }: { data: ShelfData }) {
             tabs={tabs}
             removeAfterRestore={settings.restoreRemovesFromList}
             collapsed={collapsedGroupIds.has(group.id)}
-            onCollapsedChange={(collapsed) => setCollapsedGroupIds((current) => {
-              const next = new Set(current);
-              collapsed ? next.add(group.id) : next.delete(group.id);
-              return next;
-            })}
+            onCollapsedChange={handleCollapsedChange}
           />
         ))
       )}

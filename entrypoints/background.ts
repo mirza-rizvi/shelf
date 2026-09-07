@@ -333,7 +333,7 @@ export default defineBackground(() => {
           closeOriginals: message.closeOriginals ?? settings.captureClosesTabs,
           destinationGroupId: message.destinationGroupId,
           allowDuplicates: message.allowDuplicates,
-        });
+        }, settings);
         return { ok: true, capture };
       }
       case 'restoreTab': {
@@ -418,10 +418,8 @@ export default defineBackground(() => {
         if (parsed.groups.length === 0 && parsed.errors.length > 0) {
           return { ok: false, error: parsed.errors.join(' ') };
         }
-        for (const g of [...parsed.groups].reverse()) {
-          await repo.putGroupVerified(g);
-          await repo.addGroupToIndex(g.id, 'start');
-        }
+        await repo.putGroupsVerified(parsed.groups);
+        await repo.addGroupsToIndex(parsed.groups.map(({ id }) => id), 'start');
         return { ok: true, imported: parsed.groups.length };
       }
       case 'importOneTab': {
@@ -429,10 +427,8 @@ export default defineBackground(() => {
         if (parsed.groups.length === 0) {
           return { ok: false, error: 'No links found in that file.' };
         }
-        for (const g of [...parsed.groups].reverse()) {
-          await repo.putGroupVerified(g);
-          await repo.addGroupToIndex(g.id, 'start');
-        }
+        await repo.putGroupsVerified(parsed.groups);
+        await repo.addGroupsToIndex(parsed.groups.map(({ id }) => id), 'start');
         return { ok: true, imported: parsed.groups.length };
       }
     }

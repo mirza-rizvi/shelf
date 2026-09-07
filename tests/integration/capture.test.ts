@@ -33,7 +33,7 @@ describe('saveTabList (write-verify-close)', () => {
     const removeSpy = vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
     const tabs = [fakeTab(1, 'https://a.com'), fakeTab(2, 'https://b.com', { pinned: true })];
 
-    const result = await saveTabList(tabs, 'window', { closeOriginals: true });
+    const result = await saveTabList(tabs, 'window', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(2);
     expect(result.closed).toBe(2);
@@ -60,7 +60,7 @@ describe('saveTabList (write-verify-close)', () => {
     });
 
     const tabs = [fakeTab(1, 'https://a.com')];
-    await expect(saveTabList(tabs, 'window', { closeOriginals: true })).rejects.toThrow(WriteVerifyError);
+    await expect(saveTabList(tabs, 'window', { closeOriginals: true }, DEFAULT_SETTINGS)).rejects.toThrow(WriteVerifyError);
 
     expect(removeSpy).not.toHaveBeenCalled(); // the invariant
     expect(await repo.getAllGroups()).toHaveLength(0);
@@ -68,7 +68,7 @@ describe('saveTabList (write-verify-close)', () => {
 
   it('keeps tabs open when closeOriginals is false', async () => {
     const removeSpy = vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
-    const result = await saveTabList([fakeTab(1, 'https://a.com')], 'window', { closeOriginals: false });
+    const result = await saveTabList([fakeTab(1, 'https://a.com')], 'window', { closeOriginals: false }, DEFAULT_SETTINGS);
     expect(result.saved).toBe(1);
     expect(result.closed).toBe(0);
     expect(removeSpy).not.toHaveBeenCalled();
@@ -76,7 +76,7 @@ describe('saveTabList (write-verify-close)', () => {
 
   it('counts per-tab close failures without losing the saved data', async () => {
     vi.spyOn(chrome.tabs, 'remove').mockRejectedValue(new Error('tab already closed'));
-    const result = await saveTabList([fakeTab(1, 'https://a.com')], 'window', { closeOriginals: true });
+    const result = await saveTabList([fakeTab(1, 'https://a.com')], 'window', { closeOriginals: true }, DEFAULT_SETTINGS);
     expect(result.saved).toBe(1);
     expect(result.failures).toBe(1);
     expect(await repo.getAllGroups()).toHaveLength(1);
@@ -92,7 +92,7 @@ describe('saveTabList (write-verify-close)', () => {
     } as chrome.tabGroups.TabGroup as never);
 
     const tabs = [fakeTab(1, 'https://a.com', { groupId: 77 }), fakeTab(2, 'https://b.com')];
-    await saveTabList(tabs, 'window', { closeOriginals: false });
+    await saveTabList(tabs, 'window', { closeOriginals: false }, DEFAULT_SETTINGS);
 
     const groups = await repo.getAllGroups();
     expect(groups[0]!.chromeGroups).toEqual([{ title: 'Research', color: 'blue', collapsed: false }]);
@@ -100,9 +100,37 @@ describe('saveTabList (write-verify-close)', () => {
     expect(groups[0]!.tabs[1]!.chromeGroupIdx).toBeNull();
   });
 
+  it('keeps chromeGroups order stable when group metadata resolves out of order', async () => {
+    // Two native groups: 11 first-seen, 22 second. Metadata for 22 resolves
+    // FIRST — consumption must still follow the original native-ID order.
+    // Deferred gate: CI runs Node 20, which lacks Promise.withResolvers.
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { releaseGate = resolve; });
+    vi.spyOn(chrome.tabGroups, 'get').mockImplementation(async (id: number) => {
+      if (id === 11) await gate; // held back until 22 already resolved
+      return { id, title: `G${id}`, color: id === 11 ? 'blue' : 'red', collapsed: false, windowId: 1 } as never;
+    });
+
+    const pending = saveTabList(
+      [fakeTab(1, 'https://a.com', { groupId: 11 }), fakeTab(2, 'https://b.com', { groupId: 22 }), fakeTab(3, 'https://c.com', { groupId: 11 })],
+      'window',
+      { closeOriginals: false },
+      DEFAULT_SETTINGS,
+    );
+    releaseGate();
+    await pending;
+
+    const groups = await repo.getAllGroups();
+    expect(groups[0]!.chromeGroups).toEqual([
+      { title: 'G11', color: 'blue', collapsed: false },
+      { title: 'G22', color: 'red', collapsed: false },
+    ]);
+    expect(groups[0]!.tabs.map((t) => t.chromeGroupIdx)).toEqual([0, 1, 0]);
+  });
+
   it("'tab-limit' scope labels the group 'Auto-saved'", async () => {
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
-    const result = await saveTabList([fakeTab(9, 'https://solo.com')], 'tab-limit', { closeOriginals: true });
+    const result = await saveTabList([fakeTab(9, 'https://solo.com')], 'tab-limit', { closeOriginals: true }, DEFAULT_SETTINGS);
     expect(result.saved).toBe(1);
     const groups = await repo.getAllGroups();
     expect(groups[0]!.name.startsWith('Auto-saved ·')).toBe(true);
@@ -114,7 +142,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('tab', { closeOriginals: true });
+    const result = await captureTabs('tab', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(1);
     const groups = await repo.getAllGroups();
@@ -134,7 +162,7 @@ describe('saveTabList (write-verify-close)', () => {
     vi.spyOn(chrome.tabs, 'query').mockResolvedValue(sidesFixture as never);
     const removeSpy = vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('left', { closeOriginals: true });
+    const result = await captureTabs('left', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(2);
     const groups = await repo.getAllGroups();
@@ -147,7 +175,7 @@ describe('saveTabList (write-verify-close)', () => {
     vi.spyOn(chrome.tabs, 'query').mockResolvedValue(sidesFixture as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('right', { closeOriginals: true });
+    const result = await captureTabs('right', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(1);
     const groups = await repo.getAllGroups();
@@ -164,7 +192,7 @@ describe('saveTabList (write-verify-close)', () => {
 
     // Distinct windowId so the duplicate-click guard (keyed on scope+window)
     // can't mask the empty-result path after the previous 'right' test.
-    const result = await captureTabs('right', { closeOriginals: true, windowId: 99 });
+    const result = await captureTabs('right', { closeOriginals: true, windowId: 99 }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(0);
     expect(result.groupId).toBeNull();
@@ -187,7 +215,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('group', { closeOriginals: true });
+    const result = await captureTabs('group', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(2);
     const groups = await repo.getAllGroups();
@@ -202,7 +230,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     const removeSpy = vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('group', { closeOriginals: true, windowId: 88 });
+    const result = await captureTabs('group', { closeOriginals: true, windowId: 88 }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(0);
     expect(result.groupId).toBeNull();
@@ -216,7 +244,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('selected', { closeOriginals: true });
+    const result = await captureTabs('selected', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(2);
     expect(querySpy).toHaveBeenCalledWith({ currentWindow: true, highlighted: true });
@@ -233,7 +261,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('others', { closeOriginals: true });
+    const result = await captureTabs('others', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(2);
     const groups = await repo.getAllGroups();
@@ -247,7 +275,7 @@ describe('saveTabList (write-verify-close)', () => {
       fakeTab(2, 'https://pin.com', { pinned: true }),
     ] as never);
 
-    const result = await captureTabs('window', { closeOriginals: false, windowId: 55 });
+    const result = await captureTabs('window', { closeOriginals: false, windowId: 55 }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(1);
     const groups = await repo.getAllGroups();
@@ -256,13 +284,14 @@ describe('saveTabList (write-verify-close)', () => {
 
   it("'window' scope includes pinned tabs when savePinnedTabs is on", async () => {
     await repo.ensureReady();
-    await repo.setSettings({ ...DEFAULT_SETTINGS, savePinnedTabs: true });
+    const settings = { ...DEFAULT_SETTINGS, savePinnedTabs: true };
+    await repo.setSettings(settings);
     vi.spyOn(chrome.tabs, 'query').mockResolvedValue([
       fakeTab(1, 'https://a.com'),
       fakeTab(2, 'https://pin.com', { pinned: true }),
     ] as never);
 
-    const result = await captureTabs('window', { closeOriginals: false, windowId: 56 });
+    const result = await captureTabs('window', { closeOriginals: false, windowId: 56 }, settings);
 
     expect(result.saved).toBe(2);
     const groups = await repo.getAllGroups();
@@ -274,7 +303,7 @@ describe('saveTabList (write-verify-close)', () => {
       fakeTab(3, 'https://pinned-active.com', { active: true, pinned: true }),
     ] as never);
 
-    const result = await captureTabs('tab', { closeOriginals: false });
+    const result = await captureTabs('tab', { closeOriginals: false }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(1);
   });
@@ -290,7 +319,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('window', { closeOriginals: true, windowId: 61 });
+    const result = await captureTabs('window', { closeOriginals: true, windowId: 61 }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(1);
     const groups = await repo.getAllGroups();
@@ -304,7 +333,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('window', { closeOriginals: true, windowId: 62 });
+    const result = await captureTabs('window', { closeOriginals: true, windowId: 62 }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(2);
     const groups = await repo.getAllGroups();
@@ -317,7 +346,7 @@ describe('saveTabList (write-verify-close)', () => {
   it('saveTabList (tab-limit/hub path) drops url-less candidates: never stored, never closed', async () => {
     const removeSpy = vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await saveTabList([fakeTab(1, '')], 'tab-limit', { closeOriginals: true });
+    const result = await saveTabList([fakeTab(1, '')], 'tab-limit', { closeOriginals: true }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(0);
     expect(result.groupId).toBeNull();
@@ -332,7 +361,7 @@ describe('saveTabList (write-verify-close)', () => {
     ] as never);
     vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
 
-    const result = await captureTabs('window', { closeOriginals: true, windowId: 1 });
+    const result = await captureTabs('window', { closeOriginals: true, windowId: 1 }, DEFAULT_SETTINGS);
 
     expect(result.saved).toBe(1);
     const groups = await repo.getAllGroups();
@@ -342,7 +371,7 @@ describe('saveTabList (write-verify-close)', () => {
   it('saves tabs ungrouped when the native group vanished mid-capture', async () => {
     vi.spyOn(chrome.tabGroups, 'get').mockRejectedValue(new Error('No group with id'));
     const tabs = [fakeTab(1, 'https://a.com', { groupId: 77 })];
-    await saveTabList(tabs, 'window', { closeOriginals: false });
+    await saveTabList(tabs, 'window', { closeOriginals: false }, DEFAULT_SETTINGS);
     const groups = await repo.getAllGroups();
     expect(groups[0]!.chromeGroups).toEqual([]);
     expect(groups[0]!.tabs[0]!.chromeGroupIdx).toBeNull();
@@ -353,7 +382,7 @@ describe('saveTabList (write-verify-close)', () => {
       fakeTab(1, 'https://one.example', { windowId: 10 }),
       fakeTab(2, 'https://two.example', { windowId: 20 }),
     ] as never);
-    const result = await captureTabs('all-windows', { closeOriginals: false });
+    const result = await captureTabs('all-windows', { closeOriginals: false }, DEFAULT_SETTINGS);
     expect(result.saved).toBe(2);
     expect(result.groupIds).toHaveLength(2);
     const groups = await repo.getAllGroups();
@@ -362,12 +391,8 @@ describe('saveTabList (write-verify-close)', () => {
   });
 
   it('appends to an existing session and skips duplicate URLs by default', async () => {
-    const first = await saveTabList([fakeTab(1, 'https://same.example')], 'window', { closeOriginals: false });
-    const second = await saveTabList(
-      [fakeTab(2, 'https://SAME.example/'), fakeTab(3, 'https://new.example')],
-      'window',
-      { closeOriginals: false, destinationGroupId: first.groupId! },
-    );
+    const first = await saveTabList([fakeTab(1, 'https://same.example')], 'window', { closeOriginals: false }, DEFAULT_SETTINGS);
+    const second = await saveTabList([fakeTab(2, 'https://SAME.example/'), fakeTab(3, 'https://new.example')], 'window', { closeOriginals: false, destinationGroupId: first.groupId! }, DEFAULT_SETTINGS);
     expect(second.saved).toBe(1);
     expect(second.skippedDuplicates).toBe(1);
     expect((await repo.getGroup(first.groupId!))!.tabs.map((tab) => tab.url)).toEqual([
@@ -377,12 +402,13 @@ describe('saveTabList (write-verify-close)', () => {
 
   it('never stores or closes excluded domains, including the tab-limit path', async () => {
     await repo.ensureReady();
-    await repo.setSettings({ ...DEFAULT_SETTINGS, excludedDomains: ['private.example'] });
+    const settings = { ...DEFAULT_SETTINGS, excludedDomains: ['private.example'] };
+    await repo.setSettings(settings);
     const removeSpy = vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
     const result = await saveTabList([
       fakeTab(1, 'https://private.example/inbox'),
       fakeTab(2, 'https://safe.example'),
-    ], 'tab-limit', { closeOriginals: true });
+    ], 'tab-limit', { closeOriginals: true }, settings);
     expect(result.saved).toBe(1);
     expect((await repo.getAllGroups())[0]!.tabs[0]!.url).toBe('https://safe.example');
     expect(removeSpy).toHaveBeenCalledWith(2);
