@@ -13,6 +13,7 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 ### Changed
 
 - Simplified the manager to one flat session list with search as its only persistent control.
+- Batched storage writes for imports, duplicate cleanup, and destructive Trash actions, and stopped unrelated manager cards from re-rendering — a 2,000-tab shelf now imports in four storage calls and cold-loads noticeably faster.
 - Moved JSON backup, Shelf/OneTab import, duplicate cleanup, privacy information, and help into Settings.
 - Reduced session and tab actions to restore and recoverable delete.
 - Added a verified schema-v4 migration that safely flattens existing workspace-aware data.
