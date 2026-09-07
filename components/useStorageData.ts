@@ -6,6 +6,7 @@ import {
   KEY_SETTINGS,
   KEY_TRASH_INDEX,
   idFromGroupKey,
+  idFromTrashKey,
   isGroupKey,
   isOpKey,
   isTrashKey,
@@ -55,12 +56,19 @@ export function useStorageData(): ShelfData {
   /** Mirror of `groups` readable synchronously inside async appliers, which
    * must not close over a stale render's array. */
   const groupsRef = useRef<SavedGroup[]>([]);
+  /** Mirror of `trash` readable synchronously inside async appliers. */
+  const trashRef = useRef<TrashEntry[]>([]);
   /** Incremental patches are only meaningful once a full read has landed. */
   const readyRef = useRef(false);
 
   const applyGroups = useCallback((next: SavedGroup[]) => {
     groupsRef.current = next;
     setGroups(next);
+  }, []);
+
+  const applyTrash = useCallback((next: TrashEntry[]) => {
+    trashRef.current = next;
+    setTrash(next);
   }, []);
 
   const refresh = useCallback(() => {
@@ -73,17 +81,17 @@ export function useStorageData(): ShelfData {
       ]);
       applyGroups(g);
       setSettingsState(s);
-      setTrash(t);
+      applyTrash(t);
       setLoadError(false);
       setLoading(false);
       readyRef.current = true;
-    })().catch(() => {
+    })().catch((err: unknown) => {
       // Transient storage failure must not white-screen the page forever.
       readyRef.current = false;
       setLoadError(true);
       setLoading(false);
     });
-  }, [applyGroups]);
+  }, [applyGroups, applyTrash]);
 
   /**
    * Rebuild the group list from a batch of changes, reusing existing objects
@@ -130,6 +138,53 @@ export function useStorageData(): ShelfData {
     [applyGroups],
   );
 
+  /**
+   * Patch the trash list from a batch of changes, mirroring applyGroupChanges:
+   * reuse existing entry objects the batch didn't touch, take ordering from
+   * trashIndex.newValue, and fetch only missing indexed shards. Returns false
+   * for an unpaired new shard (index write not in this batch) or unknown
+   * state so the caller falls back to refresh().
+   */
+  const applyTrashChanges = useCallback(
+    async (changes: Changes): Promise<boolean> => {
+      const trashEntries = Object.entries(changes).filter(([k]) => isTrashKey(k));
+      const indexChange = changes[KEY_TRASH_INDEX];
+      if (trashEntries.length === 0 && !indexChange) return true;
+
+      const current = trashRef.current;
+      const byId = new Map(current.map((e) => [e.id, e]));
+      for (const [key, change] of trashEntries) {
+        const id = idFromTrashKey(key);
+        const next = change.newValue as TrashEntry | undefined;
+        if (next) byId.set(id, next);
+        else byId.delete(id);
+      }
+
+      if (indexChange) {
+        // The trash index is authoritative for order and membership.
+        const order = (indexChange.newValue as { order: string[] } | undefined)?.order ?? [];
+        const missing = order.filter((id) => !byId.has(id));
+        if (missing.length > 0) {
+          const fetched = await repo.getTrashEntriesByIds(missing);
+          for (const [id, e] of fetched) byId.set(id, e);
+        }
+        // A shard that vanished between index versions is garbage; drop it.
+        applyTrash(order.filter((id) => byId.has(id)).map((id) => byId.get(id)!));
+        return true;
+      }
+
+      // No index change in this batch: a shard we've never seen has no known
+      // position — that's an add whose index write hasn't arrived yet.
+      const known = new Set(current.map((e) => e.id));
+      for (const [key, change] of trashEntries) {
+        if (change.newValue !== undefined && !known.has(idFromTrashKey(key))) return false;
+      }
+      applyTrash(current.filter((e) => byId.has(e.id)).map((e) => byId.get(e.id)!));
+      return true;
+    },
+    [applyTrash],
+  );
+
   const applyChanges = useCallback(
     async (changes: Changes): Promise<void> => {
       const keys = Object.keys(changes);
@@ -143,12 +198,12 @@ export function useStorageData(): ShelfData {
       if (KEY_SETTINGS in changes) setSettingsState(await repo.getSettings());
 
       if (KEY_TRASH_INDEX in changes || keys.some(isTrashKey)) {
-        setTrash(await repo.getTrashEntries());
+        if (!(await applyTrashChanges(changes))) refresh();
       }
 
       if (!(await applyGroupChanges(changes))) refresh();
     },
-    [applyGroupChanges, refresh],
+    [applyGroupChanges, applyTrashChanges, refresh],
   );
 
   useEffect(() => {

@@ -305,6 +305,77 @@ export async function deleteTrashEntry(id: string): Promise<void> {
   await local().remove(trashKey(id));
 }
 
+// ---------- bulk operations ----------
+//
+// Same invariants as the singular methods, one storage call per shard batch:
+// additions write shards before the index, deletions write the index before
+// removing shards. Used by import and the destructive Trash workflows so a
+// 100-session operation costs O(1) storage round-trips, not O(n).
+
+/** Batch write (plain, no per-shard verify loop beyond putGroupsVerified). */
+export async function putGroups(groups: readonly SavedGroup[]): Promise<void> {
+  if (groups.length === 0) return;
+  await putGroupsVerified([...groups]);
+}
+
+/** Index-first batch delete; runs inside the serialized index queue. */
+export function deleteGroups(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return Promise.resolve();
+  return enqueueIndexWrite(async () => {
+    const doomed = new Set(ids);
+    const index = await getIndex();
+    await setIndex({ ...index, groupOrder: index.groupOrder.filter((g) => !doomed.has(g)) });
+    await local().remove([...doomed].map(groupKey));
+  });
+}
+
+/** One batched read for the requested trash shards. Missing ids are absent
+ * from the returned map; unrelated index entries are untouched. */
+export async function getTrashEntriesByIds(ids: readonly string[]): Promise<Map<string, TrashEntry>> {
+  if (ids.length === 0) return new Map();
+  const res = await local().get([...ids].map(trashKey));
+  const map = new Map<string, TrashEntry>();
+  for (const id of ids) {
+    const e = res[trashKey(id)] as TrashEntry | undefined;
+    if (e) map.set(id, e);
+  }
+  return map;
+}
+
+/** Indexed single fetch: reads the index and shard together and trusts the
+ * index, so a stray orphan shard is never served to restore. */
+export async function getTrashEntry(id: string): Promise<TrashEntry | null> {
+  const [idx, res] = await Promise.all([
+    getTrashIndex(),
+    local().get(trashKey(id)),
+  ]);
+  if (!idx.order.includes(id)) return null;
+  return (res[trashKey(id)] as TrashEntry | undefined) ?? null;
+}
+
+/**
+ * Batch put, observably identical to repeated putTrashEntry calls: every
+ * shard lands before the index updates, and new ids are prepended in reverse
+ * input order so the newest entry stays first.
+ */
+export async function putTrashEntries(entries: readonly TrashEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  await local().set(Object.fromEntries(entries.map((e) => [trashKey(e.id), e])));
+  const idx = await getTrashIndex();
+  const fresh = entries.map((e) => e.id).filter((id) => !idx.order.includes(id));
+  if (fresh.length === 0) return;
+  await setTrashIndex({ order: [...[...fresh].reverse(), ...idx.order] });
+}
+
+/** Index-first batch delete that preserves every unrelated id and its order. */
+export async function deleteTrashEntries(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const doomed = new Set(ids);
+  const idx = await getTrashIndex();
+  await setTrashIndex({ order: idx.order.filter((t) => !doomed.has(t)) });
+  await local().remove([...doomed].map(trashKey));
+}
+
 // ---------- diagnostics ----------
 
 export async function bytesInUse(): Promise<number> {

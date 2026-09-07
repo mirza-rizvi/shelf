@@ -141,7 +141,7 @@ export async function restoreGroup(
     // Remove only successfully restored entries. A blocked or failed URL must
     // remain saved so "restore and remove" can never silently lose it.
     if (restoredItemIds.length === group.tabs.length) await trash.trashGroup(group.id);
-    else for (const tabId of restoredItemIds) await trash.trashTab(group.id, tabId);
+    else await trash.trashTabs(restoredItemIds.map((tabId) => ({ groupId: group.id, tabId })));
   }
 
   return result;

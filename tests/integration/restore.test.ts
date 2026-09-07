@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
+import type { RestoreResult, SavedGroup, TabItem } from '../../lib/types';
 import { restoreGroup, restoreTab } from '../../lib/services/restore';
-import type { SavedGroup, TabItem } from '../../lib/types';
+import * as repo from '../../lib/storage/repo';
 
 function tabItem(id: string, url: string, extra: Partial<TabItem> = {}): TabItem {
   return { id, url, title: `Title ${id}`, pinned: false, savedAt: 1, chromeGroupIdx: null, ...extra };
@@ -128,5 +129,29 @@ describe('restore targeting', () => {
       { url: 'javascript:alert(1)', title: 'Title a', reason: 'blocked-scheme' },
     ]);
     expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('restore with removeAfter', () => {
+  it('trashes only restored tabs; blocked URLs stay on the shelf as trash entries', async () => {
+    const group = savedGroup(
+      [tabItem('ok', 'https://ok.com'), tabItem('blocked', 'javascript:alert(1)')],
+    );
+    await repo.putGroupVerified(group);
+    await repo.addGroupToIndex(group.id, 'end');
+
+    const result = await restoreGroup(group, { removeAfter: true });
+    expect(result.restored).toBe(1);
+    expect(result.skipped).toHaveLength(1);
+
+    // The restored tab left the shelf; the blocked one remains live, and the
+    // removed tab is an individual recoverable Trash entry.
+    const live = await repo.getAllGroups();
+    expect(live).toHaveLength(1);
+    expect(live[0]!.tabs.map((t) => t.id)).toEqual(['blocked']);
+    const trashed = await repo.getTrashEntries();
+    expect(trashed).toHaveLength(1);
+    expect(trashed[0]!.kind).toBe('tab');
+    expect(trashed[0]!.group.tabs[0]!.id).toBe('ok');
   });
 });

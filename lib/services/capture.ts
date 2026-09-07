@@ -2,6 +2,7 @@ import type {
   CaptureResult,
   SavedChromeTabGroup,
   SavedGroup,
+  Settings,
   TabGroupColor,
   TabItem,
 } from '../types';
@@ -134,10 +135,9 @@ let lastCapture: { key: string; at: number } | null = null;
 export async function captureTabs(
   scope: CaptureScope,
   opts: CaptureOptions,
+  settings: Settings,
 ): Promise<CaptureResult> {
   await repo.ensureReady();
-
-  // Key the duplicate-click guard on the REAL window id — a literal 'cur'
   // would swallow a legit save in window B right after saving window A.
   let windowKey: string | number = 'all';
   if (scope !== 'all-windows') {
@@ -154,7 +154,6 @@ export async function captureTabs(
   }
   lastCapture = { key: dupKey, at: now };
 
-  const settings = await repo.getSettings();
   const rawTabs = await queryScope(scope, opts.windowId);
   // Drop Shelf's own pages, New Tab pages, about:blank, and url-less tabs;
   // still-loading tabs are kept (their target lives in pendingUrl).
@@ -170,10 +169,10 @@ export async function captureTabs(
   }
 
   if (scope === 'all-windows' && !opts.destinationGroupId) {
-    return saveWindowGroups(tabs, opts);
+    return saveWindowGroups(tabs, opts, settings);
   }
 
-  return saveTabList(tabs, scope, opts);
+  return saveTabList(tabs, scope, opts, settings);
 }
 
 async function filterDuplicateCandidates(
@@ -197,22 +196,32 @@ async function filterDuplicateCandidates(
   return { tabs, skipped };
 }
 
+/** Distinct native tab-group metadata, fetched concurrently but CONSUMED in
+ * the original native-group-ID order, so chromeGroups and every tab's
+ * chromeGroupIdx are deterministic regardless of resolution order. */
+async function fetchNativeGroupMeta(nativeGroupIds: number[]): Promise<{
+  chromeGroups: SavedChromeTabGroup[];
+  groupIdxByNativeId: Map<number, number>;
+}> {
+  const settled = await Promise.allSettled(nativeGroupIds.map((id) => chrome.tabGroups.get(id)));
+  const chromeGroups: SavedChromeTabGroup[] = [];
+  const groupIdxByNativeId = new Map<number, number>();
+  settled.forEach((result, i) => {
+    // A group that vanished mid-capture saves its tabs ungrouped.
+    if (result.status !== 'fulfilled') return;
+    const g = result.value;
+    groupIdxByNativeId.set(nativeGroupIds[i]!, chromeGroups.length);
+    chromeGroups.push({ title: g.title ?? '', color: g.color as TabGroupColor, collapsed: g.collapsed });
+  });
+  return { chromeGroups, groupIdxByNativeId };
+}
+
 async function buildGroup(
   candidates: chrome.tabs.Tab[],
   scope: CaptureScope | 'tab-limit',
 ): Promise<SavedGroup> {
   const nativeGroupIds = [...new Set(candidates.map((t) => t.groupId).filter((g) => g !== -1 && g !== undefined))] as number[];
-  const chromeGroups: SavedChromeTabGroup[] = [];
-  const groupIdxByNativeId = new Map<number, number>();
-  for (const nativeId of nativeGroupIds) {
-    try {
-      const g = await chrome.tabGroups.get(nativeId);
-      groupIdxByNativeId.set(nativeId, chromeGroups.length);
-      chromeGroups.push({ title: g.title ?? '', color: g.color as TabGroupColor, collapsed: g.collapsed });
-    } catch {
-      // Group vanished mid-capture; save its tabs ungrouped.
-    }
-  }
+  const { chromeGroups, groupIdxByNativeId } = await fetchNativeGroupMeta(nativeGroupIds);
   const savedAt = Date.now();
   const tabs: TabItem[] = candidates.map((t) => ({
     id: crypto.randomUUID(),
@@ -236,6 +245,7 @@ async function buildGroup(
   return group;
 }
 
+
 async function closeCapturedTabs(candidates: chrome.tabs.Tab[], shouldClose: boolean): Promise<{ closed: number; failures: number }> {
   if (!shouldClose) return { closed: 0, failures: 0 };
   const tabIds = candidates.map((tab) => tab.id).filter((id): id is number => id !== undefined);
@@ -247,9 +257,7 @@ async function closeCapturedTabs(candidates: chrome.tabs.Tab[], shouldClose: boo
   }
   return { closed, failures };
 }
-
-async function saveWindowGroups(tabs: chrome.tabs.Tab[], opts: CaptureOptions): Promise<CaptureResult> {
-  const settings = await repo.getSettings();
+async function saveWindowGroups(tabs: chrome.tabs.Tab[], opts: CaptureOptions, settings: Settings): Promise<CaptureResult> {
   const byWindow = new Map<number, chrome.tabs.Tab[]>();
   for (const tab of tabs) {
     if (tab.windowId === undefined) continue;
@@ -293,6 +301,7 @@ export async function saveTabList(
   candidates: chrome.tabs.Tab[],
   scope: CaptureScope | 'tab-limit',
   opts: CaptureOptions,
+  settings: Settings,
 ): Promise<CaptureResult> {
   // Belt for direct callers (tab-limit, hub): blank tabs are never stored,
   // and since the close set below equals the saved set, never closed either.
@@ -301,7 +310,6 @@ export async function saveTabList(
     return { groupId: null, saved: 0, closed: 0, failures: 0 };
   }
 
-  const settings = await repo.getSettings();
   candidates = candidates.filter((tab) => !matchesExcludedDomain(resolveTabUrl(tab), settings.excludedDomains));
   if (candidates.length === 0) return { groupId: null, saved: 0, closed: 0, failures: 0 };
   const destination = opts.destinationGroupId ? await repo.getGroup(opts.destinationGroupId) : null;

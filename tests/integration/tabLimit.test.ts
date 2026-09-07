@@ -209,4 +209,32 @@ describe('tab limit runCheck', () => {
     await runCheck();
     expect(querySpy).not.toHaveBeenCalled();
   });
+
+  it('evicts only each window\'s own oldest tabs across two over-limit windows', async () => {
+    await enableLimit(2);
+    await chrome.storage.session.set({
+      tabFirstSeen: { 1: 100, 2: 200, 3: 300, 4: 400, 5: 50, 6: 150, 7: 250, 8: 350 },
+    });
+    vi.spyOn(chrome.tabs, 'query').mockResolvedValue([
+      fakeTab(1, 'https://w1.com/1', { windowId: 1, index: 0 }),
+      fakeTab(2, 'https://w1.com/2', { windowId: 1, index: 1 }),
+      fakeTab(3, 'https://w1.com/3', { windowId: 1, index: 2 }),
+      fakeTab(4, 'https://w1.com/4', { windowId: 1, index: 3 }),
+      fakeTab(5, 'https://w2.com/1', { windowId: 2, index: 0 }),
+      fakeTab(6, 'https://w2.com/2', { windowId: 2, index: 1 }),
+      fakeTab(7, 'https://w2.com/3', { windowId: 2, index: 2 }),
+      fakeTab(8, 'https://w2.com/4', { windowId: 2, index: 3 }),
+    ] as never);
+    const removeSpy = vi.spyOn(chrome.tabs, 'remove').mockResolvedValue(undefined as never);
+
+    await runCheck();
+
+    // Two excess per window; eviction is per-window oldest-first.
+    expect(removeSpy.mock.calls.map((c) => c[0]).sort()).toEqual([1, 2, 5, 6]);
+    const groups = await repo.getAllGroups();
+    expect(groups).toHaveLength(2);
+    const evicted = groups.map((g) => g.tabs.map((t) => t.url).sort()).sort();
+    expect(evicted[0]).toEqual(['https://w1.com/1', 'https://w1.com/2']);
+    expect(evicted[1]).toEqual(['https://w2.com/1', 'https://w2.com/2']);
+  });
 });

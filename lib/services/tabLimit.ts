@@ -20,7 +20,7 @@ const SESSION_LATCH = 'limitCheckRunning';
 /** Latch entries older than this are stale (SW died mid-check) and ignored. */
 const LATCH_STALE_MS = 60_000;
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let debounceTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
 /**
  * Cached `settings.tabLimit.enabled`. The feature is OFF by default, yet
@@ -31,18 +31,29 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
  */
 let enabledCache: boolean | null = null;
 
+/**
+ * Cached `tabFirstSeen` map. The limit check used to re-read the whole map
+ * from storage.session for every over-limit window; the cache keeps one
+ * durable read per worker lifetime. Writers still persist each actual
+ * mutation before their promise resolves; a failed session write invalidates
+ * the cache so the next event reloads durable state.
+ */
+let firstSeenCache: Record<string, number> | null = null;
+
+async function readFirstSeen(): Promise<Record<string, number>> {
+  firstSeenCache ??= ((await chrome.storage.session.get(SESSION_FIRST_SEEN))[SESSION_FIRST_SEEN] as
+    | Record<string, number>
+    | undefined) ?? {};
+  return firstSeenCache;
+}
+
 /** Push the current setting in. Called from ensureAlarms(), which already runs
  * on install, on startup, and after every saveSettings — so the toggle
  * propagates immediately with no extra reads. Pass null to forget it and force
  * the next event to re-read (used by tests, and harmless in production). */
 export function noteEnabled(enabled: boolean | null): void {
   enabledCache = enabled;
-}
-
-/** Seed the cache from storage if this service worker hasn't learned it yet. */
-async function isEnabled(): Promise<boolean> {
-  enabledCache ??= (await repo.getSettings()).tabLimit.enabled;
-  return enabledCache;
+  if (enabled === null) firstSeenCache = null; // fresh worker: drop the map too
 }
 
 export async function markStartup(): Promise<void> {
@@ -59,6 +70,13 @@ export async function noteBulkOperation(): Promise<void> {
   await chrome.storage.session.set({ [SESSION_STARTUP_AT]: Date.now() });
 }
 
+/** Seed the cache from storage if this service worker hasn't learned it yet. */
+async function isEnabled(): Promise<boolean> {
+  enabledCache ??= (await repo.getSettings()).tabLimit.enabled;
+  return enabledCache;
+}
+
+
 /** Serialize firstSeen map writes: onCreated/onRemoved fire per tab, and a
  * 100-tab restore would otherwise run 100 concurrent read-modify-write
  * cycles on the same object, losing most entries. */
@@ -73,11 +91,16 @@ export function noteTabCreated(tabId: number | undefined): Promise<void> {
   if (tabId === undefined || enabledCache === false) return Promise.resolve();
   return enqueueFirstSeen(async () => {
     if (!(await isEnabled())) return;
-    const res = await chrome.storage.session.get(SESSION_FIRST_SEEN);
-    const map = (res[SESSION_FIRST_SEEN] as Record<string, number> | undefined) ?? {};
+    const map = { ...(await readFirstSeen()) };
     if (map[tabId] === undefined) {
       map[tabId] = Date.now();
-      await chrome.storage.session.set({ [SESSION_FIRST_SEEN]: map });
+      try {
+        await chrome.storage.session.set({ [SESSION_FIRST_SEEN]: map });
+        firstSeenCache = map;
+      } catch (err) {
+        firstSeenCache = null; // next event reloads durable state
+        throw err;
+      }
     }
   });
 }
@@ -87,11 +110,16 @@ export function forgetTab(tabId: number): Promise<void> {
   if (enabledCache === false) return Promise.resolve();
   return enqueueFirstSeen(async () => {
     if (!(await isEnabled())) return;
-    const res = await chrome.storage.session.get(SESSION_FIRST_SEEN);
-    const map = (res[SESSION_FIRST_SEEN] as Record<string, number> | undefined) ?? {};
+    const map = { ...(await readFirstSeen()) };
     if (map[tabId] !== undefined) {
       delete map[tabId];
-      await chrome.storage.session.set({ [SESSION_FIRST_SEEN]: map });
+      try {
+        await chrome.storage.session.set({ [SESSION_FIRST_SEEN]: map });
+        firstSeenCache = map;
+      } catch (err) {
+        firstSeenCache = null; // next event reloads durable state
+        throw err;
+      }
     }
   });
 }
@@ -101,16 +129,14 @@ export function forgetTab(tabId: number): Promise<void> {
 export function scheduleCheck(): void {
   // Don't hold the service worker awake for a check that would bail anyway.
   if (enabledCache === false) return;
-  if (debounceTimer) clearTimeout(debounceTimer);
+  clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
-    debounceTimer = null;
+    debounceTimer = undefined;
     runCheck().catch(() => {}); // saveTabList can throw WriteVerifyError
   }, LIMIT_DEBOUNCE_MS);
 }
 
-async function toEvalTabs(tabs: chrome.tabs.Tab[]): Promise<EvalTab[]> {
-  const res = await chrome.storage.session.get(SESSION_FIRST_SEEN);
-  const firstSeen = (res[SESSION_FIRST_SEEN] as Record<string, number> | undefined) ?? {};
+function toEvalTabs(tabs: chrome.tabs.Tab[], firstSeen: Readonly<Record<string, number>>): EvalTab[] {
   return tabs
     .filter((t) => t.id !== undefined)
     .map((t) => ({
@@ -140,7 +166,8 @@ export function runCheck(): Promise<void> {
 }
 
 async function doRunCheck(): Promise<void> {
-  const { tabLimit } = await repo.getSettings();
+  const settings = await repo.getSettings();
+  const { tabLimit } = settings;
   enabledCache = tabLimit.enabled; // authoritative read — keep the gate honest
   if (!tabLimit.enabled) return;
 
@@ -160,15 +187,21 @@ async function doRunCheck(): Promise<void> {
     // New Tab pages have nothing worth saving — neither is counted or evicted.
     const allTabs = (await chrome.tabs.query({})).filter((t) => !t.discarded && isSaveworthy(t));
 
+    // Pending bookkeeping must be durable before the single first-seen
+    // snapshot is taken, or a just-created tab could be judged "oldest".
+    await firstSeenQueue.catch(() => {});
+    const firstSeen = { ...(await readFirstSeen()) };
+
     for (const scopeTabs of groupByWindow(allTabs).values()) {
       const excess = scopeTabs.length - tabLimit.maxTabs;
       if (excess <= 0) continue;
 
-      const candidates = selectEvictionCandidates(await toEvalTabs(scopeTabs), excess);
+      const candidates = selectEvictionCandidates(toEvalTabs(scopeTabs, firstSeen), excess);
       if (candidates.length === 0) continue;
 
-      const candidateTabs = scopeTabs.filter((t) => candidates.some((c) => c.id === t.id));
-      await saveTabList(candidateTabs, 'tab-limit', { closeOriginals: true });
+      const candidateIds = new Set(candidates.map((c) => c.id));
+      const candidateTabs = scopeTabs.filter((t) => candidateIds.has(t.id!));
+      await saveTabList(candidateTabs, 'tab-limit', { closeOriginals: true }, settings);
     }
   } finally {
     await chrome.storage.session.remove(SESSION_LATCH);
