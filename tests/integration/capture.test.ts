@@ -103,9 +103,11 @@ describe('saveTabList (write-verify-close)', () => {
   it('keeps chromeGroups order stable when group metadata resolves out of order', async () => {
     // Two native groups: 11 first-seen, 22 second. Metadata for 22 resolves
     // FIRST — consumption must still follow the original native-ID order.
-    const gate = Promise.withResolvers<void>();
+    // Deferred gate: CI runs Node 20, which lacks Promise.withResolvers.
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { releaseGate = resolve; });
     vi.spyOn(chrome.tabGroups, 'get').mockImplementation(async (id: number) => {
-      if (id === 11) await gate.promise; // held back until 22 already resolved
+      if (id === 11) await gate; // held back until 22 already resolved
       return { id, title: `G${id}`, color: id === 11 ? 'blue' : 'red', collapsed: false, windowId: 1 } as never;
     });
 
@@ -115,7 +117,7 @@ describe('saveTabList (write-verify-close)', () => {
       { closeOriginals: false },
       DEFAULT_SETTINGS,
     );
-    gate.resolve();
+    releaseGate();
     await pending;
 
     const groups = await repo.getAllGroups();
