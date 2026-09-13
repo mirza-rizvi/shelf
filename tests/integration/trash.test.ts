@@ -1,0 +1,181 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
+import type { SavedGroup } from '../../lib/types';
+import * as repo from '../../lib/storage/repo';
+import * as trash from '../../lib/services/trash';
+import * as organization from '../../lib/services/organization';
+
+function makeGroup(id: string, count: number): SavedGroup {
+  return {
+    id,
+    name: `Group ${id}`,
+    createdAt: 1,
+    updatedAt: 1,
+    chromeGroups: [],
+    tabs: Array.from({ length: count }, (_, i) => ({
+      id: `${id}-t${i}`,
+      url: `https://site${i}.com`,
+      title: `Tab ${i}`,
+      pinned: false,
+      savedAt: 1,
+      chromeGroupIdx: null,
+    })),
+  };
+}
+
+async function seed(id: string, count = 2): Promise<SavedGroup> {
+  const g = makeGroup(id, count);
+  await repo.putGroupVerified(g);
+  await repo.addGroupToIndex(id);
+  return g;
+}
+
+beforeEach(() => {
+  fakeBrowser.reset();
+});
+
+describe('trash service', () => {
+  it('trashGroup moves the group out of the live set and is restorable', async () => {
+    await seed('g1');
+    const entryId = await trash.trashGroup('g1');
+    expect(entryId).not.toBeNull();
+    expect(await repo.getAllGroups()).toHaveLength(0);
+    expect(await repo.getTrashEntries()).toHaveLength(1);
+
+    const ok = await trash.restoreFromTrash(entryId!);
+    expect(ok).toBe(true);
+    const groups = await repo.getAllGroups();
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.tabs).toHaveLength(2);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
+  });
+
+  it('purgeAll empties the trash permanently without touching live shelves', async () => {
+    await seed('g1');
+    await seed('g2');
+    await seed('keep');
+    await trash.trashGroup('g1');
+    await trash.trashGroup('g2');
+    expect(await repo.getTrashEntries()).toHaveLength(2);
+
+    const purged = await trash.purgeAll();
+
+    expect(purged).toBe(2);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
+    const all = await chrome.storage.local.get(null);
+    expect(Object.keys(all).filter((k) => k.startsWith('trash:'))).toHaveLength(0);
+    expect((await repo.getAllGroups()).map((g) => g.id)).toEqual(['keep']);
+  });
+
+  it('trashTab removes one tab; deleting the last tab removes the group', async () => {
+    await seed('g1', 2);
+    await trash.trashTab('g1', 'g1-t0');
+    let g = await repo.getGroup('g1');
+    expect(g!.tabs.map((t) => t.id)).toEqual(['g1-t1']);
+
+    await trash.trashTab('g1', 'g1-t1');
+    g = await repo.getGroup('g1');
+    expect(g).toBeNull();
+    expect(await repo.getTrashEntries()).toHaveLength(2);
+  });
+
+  it('trashAll moves every session into independently recoverable Trash entries', async () => {
+    await seed('g1', 2);
+    await seed('g2', 1);
+
+    expect(await trash.trashAll()).toBe(2);
+    expect(await repo.getAllGroups()).toHaveLength(0);
+    const entries = await repo.getTrashEntries();
+    expect(entries).toHaveLength(2);
+
+    for (const entry of entries) expect(await trash.restoreFromTrash(entry.id)).toBe(true);
+    expect((await repo.getAllGroups()).map((group) => group.id).sort()).toEqual(['g1', 'g2']);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
+  });
+
+  it('trashAll is a safe no-op when the shelf is empty', async () => {
+    expect(await trash.trashAll()).toBe(0);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
+  });
+
+  it('purgeExpired drops only entries older than retention', async () => {
+    await seed('g1');
+    await seed('g2');
+    const oldId = await trash.trashGroup('g1');
+    const newId = await trash.trashGroup('g2');
+    // Age the first entry by 40 days.
+    const entries = await repo.getTrashEntries();
+    const oldEntry = entries.find((e) => e.id === oldId)!;
+    await chrome.storage.local.set({
+      [`trash:${oldId}`]: { ...oldEntry, deletedAt: Date.now() - 40 * 24 * 60 * 60 * 1000 },
+    });
+
+    const purged = await trash.purgeExpired();
+    expect(purged).toBe(1);
+    const remaining = await repo.getTrashEntries();
+    expect(remaining.map((e) => e.id)).toEqual([newId]);
+  });
+
+  it('trashTabs removes tabs across groups; each removal undoes independently', async () => {
+    await seed('g1', 3);
+    await seed('g2', 2);
+
+    const entryIds = await trash.trashTabs([
+      { groupId: 'g1', tabId: 'g1-t0' },
+      { groupId: 'g2', tabId: 'g2-t0' },
+      { groupId: 'g2', tabId: 'g2-t1' }, // empties g2
+      { groupId: 'g1', tabId: 'missing' }, // skipped like repeated trashTab
+      { groupId: 'ghost', tabId: 'x' }, // skipped
+    ]);
+    expect(entryIds).toHaveLength(3);
+
+    const groups = await repo.getAllGroups();
+    expect(groups.map((g) => g.id)).toEqual(['g1']);
+    expect(groups[0]!.tabs.map((t) => t.id)).toEqual(['g1-t1', 'g1-t2']);
+
+    const entries = await repo.getTrashEntries();
+    expect(entries.map((e) => e.kind)).toEqual(['tab', 'tab', 'tab']);
+    // Newest-first trash order, independent undo per entry.
+    for (const id of entryIds) {
+      expect(entries.some((e) => e.id === id)).toBe(true);
+      expect(await trash.restoreFromTrash(id)).toBe(true);
+    }
+    const restored = await repo.getAllGroups();
+    // Remaining g1 (2 tabs) + three independently wrapped one-tab entries.
+    expect(restored).toHaveLength(4);
+    expect(restored.map((g) => g.tabs.length).sort()).toEqual([1, 1, 1, 2]);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
+  });
+
+  it('removeDuplicates batches duplicate cleanup through the trash', async () => {
+    const mk = (id: string, url: string): SavedGroup => ({
+      id,
+      name: `Group ${id}`,
+      createdAt: 1,
+      updatedAt: 1,
+      chromeGroups: [],
+      tabs: [
+        { id: `${id}-dup`, url, title: url, pinned: false, savedAt: 1, chromeGroupIdx: null },
+        { id: `${id}-unique`, url: `https://${id}.com/only`, title: url, pinned: false, savedAt: 1, chromeGroupIdx: null },
+      ],
+    });
+    await seed('g1', 1);
+    await repo.putGroupVerified(mk('gA', 'https://dup.com/a'));
+    await repo.addGroupToIndex('gA', 'end');
+    await repo.putGroupVerified(mk('gB', 'https://dup.com/a'));
+    await repo.addGroupToIndex('gB', 'end');
+
+    // Exactly one duplicate set (the shared URL); the newest copy loses.
+    const removed = await organization.removeDuplicates('oldest');
+    expect(removed).toBe(1);
+    const live = await repo.getAllGroups();
+    expect(
+      live.flatMap((g) => g.tabs.map((t) => t.url)).filter((u) => u === 'https://dup.com/a'),
+    ).toHaveLength(1);
+    expect(live.flatMap((g) => g.tabs.map((t) => t.id))).toContain('gA-dup');
+    const trashed = await repo.getTrashEntries();
+    expect(trashed).toHaveLength(1);
+    expect(trashed[0]!.kind).toBe('tab');
+    expect(trashed[0]!.group.tabs[0]!.id).toBe('gB-dup');
+  });
+});

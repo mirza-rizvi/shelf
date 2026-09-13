@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a focused improvement that preserves Shelf's privacy and simplicity.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful solution.
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Privacy, permission, and performance impact
+      description: Note whether this would require networking, new permissions, or dependencies.
+    validations:
+      required: true
