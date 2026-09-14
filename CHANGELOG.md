@@ -4,7 +4,9 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 
 ## [Unreleased]
 
-No changes yet.
+### Changed
+
+- Added a public README hero and product screenshot gallery covering session management, dark mode, and settings.
 
 ## [1.0.0] - 2026-08-18
 
