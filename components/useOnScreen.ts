@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
  * Falls back to permanently-on when IntersectionObserver is unavailable
  * (jsdom under vitest), so tests see the full tree.
  */
-export function useOnScreen<T extends Element>(rootMargin = '600px'): [RefObject<T>, boolean] {
+export function useOnScreen<T extends Element>(rootMargin = '600px'): [RefObject<T | null>, boolean] {
   const ref = useRef<T>(null);
   const [onScreen, setOnScreen] = useState(false);
 
