@@ -7,6 +7,9 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 ### Changed
 
 - Added a public README hero and product screenshot gallery covering session management, dark mode, and settings.
+- Updated React and React DOM to 19.3.0, including their matching type definitions.
+- Updated the Chrome extension API type definitions to 0.2.9.
+- Updated Playwright Core to 1.63.0.
 
 ## [1.0.0] - 2026-08-18
 
