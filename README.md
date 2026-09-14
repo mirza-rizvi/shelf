@@ -6,6 +6,8 @@
 
 Shelf is a privacy-first tab manager for Chrome and Chromium browsers. Save open tabs into local sessions, close them only after a verified write, and restore them later without an account, cloud service, analytics, or tracking.
 
+![Shelf — Save your tabs. Keep your privacy.](store-assets/promo-marquee-1400x560.png)
+
 ## Why Shelf
 
 - Save one tab, highlighted tabs, a tab group, a window, or every window.
@@ -19,6 +21,26 @@ Shelf is a privacy-first tab manager for Chrome and Chromium browsers. Save open
 - Use keyboard commands, context menus, dark mode, and an optional tab limit.
 
 Shelf stores data in `chrome.storage.local`. It makes no external requests and requests no host permissions. See the [privacy policy](docs/PRIVACY.md) and [threat model](docs/THREAT-MODEL.md) for the exact guarantees and limitations.
+
+## See Shelf in action
+
+### Save, search, and restore
+
+Saved tabs stay organized in a fast, searchable session list with focused restore and delete actions.
+
+![Shelf manager showing searchable saved-tab sessions in light mode](store-assets/1-manager-light.png)
+
+### Comfortable in dark mode
+
+Shelf follows your preferred theme while keeping the same clear session overview.
+
+![Shelf manager showing saved-tab sessions in dark mode](store-assets/2-manager-dark.png)
+
+### Control how Shelf behaves
+
+Choose when source tabs close, skip duplicate URLs, exclude domains, adjust restore behavior, and optionally set a per-window tab limit.
+
+![Shelf settings for saving, restoring, domain exclusions, themes, and tab limits](store-assets/3-settings.png)
 
 ## Install from source
 
