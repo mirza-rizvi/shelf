@@ -97,7 +97,7 @@ grace window 30 s (session-restore storm at startup; also renewed around every r
 
 Scheme allowlist (`http`, `https`, `file`, `about`, `chrome`); `javascript:`/`data:`/`vbscript:` are never opened (copy-only in UI). Every `tabs.create` is individually caught; one restricted URL never aborts a batch.
 
-**Lazy restore (group restores only):** restored tabs are `chrome.tabs.discard`ed to minimize memory use until clicked — but only AFTER their navigation commits (poll `tab.url` up to 20×100 ms; on timeout skip the discard — discarding pre-commit blanks the tab). Single-tab restore loads eagerly: the user clicked that tab to read it. Ungrouped tabs discard per creation chunk (bounds the load spike); grouped tabs only after `tabs.group()` runs (discard can replace the tab id), also chunked.
+**Lazy restore (group restores only):** restored tabs are `chrome.tabs.discard`ed to minimize memory use until clicked — but only AFTER their navigation commits (one `tabs.onUpdated` listener per restore, attached before the first `tabs.create`, records each commit; a tab that hasn't committed within 2 s is left loading — discarding pre-commit blanks the tab). Single-tab restore loads eagerly: the user clicked that tab to read it. Ungrouped tabs discard per creation chunk (bounds the load spike); grouped tabs only after `tabs.group()` runs (discard can replace the tab id), also chunked.
 
 ## Migrations
 
@@ -115,6 +115,8 @@ Shelf runs beside every tab the user has open, so its own cost stays small and i
 - **Popup** — opening the popup reads settings only; saved sessions load when "More save options" is opened.
 - **Search** — `tests/perf/search.test.ts` keeps a keystroke burst over 2,000 tabs under a generous bound. Lowercased haystacks are cached per group object, the query is deferred with `useDeferredValue`, and an unchanged match set reuses the same tab array so cards stay memoized.
 - **Trash in the pinned tab** — the manager holds only the trash count (from `trashIndex`); full entries load when the Trash page opens and are dropped when it closes.
+- **Restore** — no `tabs.get` polling; `tests/integration/restore.test.ts` asserts zero `tabs.get` calls and that the commit listener is removed afterwards.
+- **Tab limit (when on)** — first-seen bookkeeping coalesces bursts into one `storage.session` write (a 50-tab burst must cost ≤ 2 writes). Alarms are re-created only when missing or when their period changes.
 - **Bundle** — `scripts/verify-release.mjs` fails the release if `background.js` exceeds 40 kB or any page chunk exceeds 60 kB.
 - **Manifest** — the same script pins the permission list and forbids content scripts and host permissions.
 

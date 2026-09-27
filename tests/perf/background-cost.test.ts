@@ -119,4 +119,21 @@ describe('service-worker wakeup budget', () => {
       expect(info.periodInMinutes ?? Infinity).toBeGreaterThanOrEqual(MIN_ALARM_PERIOD_MINUTES);
     }
   });
+
+  it('does not re-create alarms that already exist with the same period', async () => {
+    await chrome.storage.local.set({
+      [KEY_META]: { schemaVersion: CURRENT_SCHEMA_VERSION, installedAt: 1 },
+      [KEY_SETTINGS]: DEFAULT_SETTINGS,
+    });
+    const create = vi.spyOn(chrome.alarms, 'create');
+    background.main?.();
+    fire('runtime.onInstalled', { reason: 'install' });
+    await vi.advanceTimersByTimeAsync(1000);
+    const firstRun = create.mock.calls.length;
+    expect(firstRun).toBeGreaterThan(0);
+
+    fire('runtime.onStartup');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(create.mock.calls.length).toBe(firstRun);
+  });
 });

@@ -94,15 +94,24 @@ export default defineBackground(() => {
     })().catch(() => {});
   });
 
+  /** Create an alarm only if it is missing or has a different period.
+   * Re-creating an existing alarm resets its schedule, so a daily purge
+   * re-asserted on every startup and settings save could keep slipping. */
+  async function ensureAlarm(name: string, periodInMinutes: number): Promise<void> {
+    const existing = await chrome.alarms.get(name);
+    if (existing?.periodInMinutes === periodInMinutes) return;
+    await chrome.alarms.create(name, { periodInMinutes });
+  }
+
   async function ensureAlarms(): Promise<void> {
     const settings = await repo.getSettings();
     // Runs on install, on startup and after every saveSettings — the one place
     // that always has fresh settings, so the tab-limit gate rides along.
     tabLimit.noteEnabled(settings.tabLimit.enabled);
-    await chrome.alarms.create(ALARM_TRASH_PURGE, { periodInMinutes: 24 * 60 });
-    await chrome.alarms.create(ALARM_ORPHAN_GC, { periodInMinutes: 7 * 24 * 60 });
+    await ensureAlarm(ALARM_TRASH_PURGE, 24 * 60);
+    await ensureAlarm(ALARM_ORPHAN_GC, 7 * 24 * 60);
     if (settings.tabLimit.enabled) {
-      await chrome.alarms.create(ALARM_LIMIT_SWEEP, { periodInMinutes: LIMIT_SWEEP_MINUTES });
+      await ensureAlarm(ALARM_LIMIT_SWEEP, LIMIT_SWEEP_MINUTES);
     } else {
       await chrome.alarms.clear(ALARM_LIMIT_SWEEP);
     }

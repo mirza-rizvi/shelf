@@ -83,6 +83,25 @@ describe('tab limit first-seen bookkeeping', () => {
   });
 });
 
+describe('tab limit write budget', () => {
+  it('coalesces a burst of tab events into a couple of session writes', async () => {
+    await enableLimit(3);
+    const set = vi.spyOn(chrome.storage.session, 'set');
+
+    await Promise.all(Array.from({ length: 50 }, (_, i) => noteTabCreated(100 + i)));
+
+    expect(set.mock.calls.length).toBeLessThanOrEqual(2);
+    const seen = (await chrome.storage.session.get('tabFirstSeen')).tabFirstSeen as Record<string, number>;
+    expect(Object.keys(seen)).toHaveLength(50);
+
+    set.mockClear();
+    await Promise.all(Array.from({ length: 50 }, (_, i) => forgetTab(100 + i)));
+    expect(set.mock.calls.length).toBeLessThanOrEqual(2);
+    const after = (await chrome.storage.session.get('tabFirstSeen')).tabFirstSeen as Record<string, number>;
+    expect(Object.keys(after)).toHaveLength(0);
+  });
+});
+
 describe('tab limit runCheck', () => {
   it('auto-saves exactly the excess oldest tabs and closes them', async () => {
     await enableLimit(3);

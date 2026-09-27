@@ -53,7 +53,12 @@ async function readFirstSeen(): Promise<Record<string, number>> {
  * the next event to re-read (used by tests, and harmless in production). */
 export function noteEnabled(enabled: boolean | null): void {
   enabledCache = enabled;
-  if (enabled === null) firstSeenCache = null; // fresh worker: drop the map too
+  if (enabled === null) {
+    // Fresh worker: drop the map and any unflushed events too.
+    firstSeenCache = null;
+    pendingSeen.clear();
+    pendingForget.clear();
+  }
 }
 
 export async function markStartup(): Promise<void> {
@@ -87,45 +92,64 @@ function enqueueFirstSeen(fn: () => Promise<void>): Promise<void> {
   return next;
 }
 
-export function noteTabCreated(tabId: number | undefined): Promise<void> {
-  if (tabId === undefined || enabledCache === false) return Promise.resolve();
-  return enqueueFirstSeen(async () => {
+/** Tab events waiting for the next coalesced firstSeen write. */
+const pendingSeen = new Map<number, number>();
+const pendingForget = new Set<number>();
+let flushPending: Promise<void> | null = null;
+
+/** Coalesce firstSeen mutations: every onCreated/onRemoved that arrives while
+ * a write is queued joins it, so a 100-tab restore costs a couple of
+ * storage.session writes instead of 100 full-map rewrites. Each caller's
+ * promise still resolves only after its mutation is durable. */
+function flushFirstSeen(): Promise<void> {
+  flushPending ??= enqueueFirstSeen(async () => {
+    flushPending = null; // events from here on join the next write
+    const seen = [...pendingSeen];
+    const forget = [...pendingForget];
+    pendingSeen.clear();
+    pendingForget.clear();
     if (!(await isEnabled())) return;
     const map = { ...(await readFirstSeen()) };
-    if (map[tabId] === undefined) {
-      map[tabId] = Date.now();
-      try {
-        await chrome.storage.session.set({ [SESSION_FIRST_SEEN]: map });
-        firstSeenCache = map;
-      } catch (err) {
-        firstSeenCache = null; // next event reloads durable state
-        throw err;
+    let changed = false;
+    for (const [tabId, at] of seen) {
+      if (map[tabId] === undefined) {
+        map[tabId] = at;
+        changed = true;
       }
     }
+    for (const tabId of forget) {
+      if (map[tabId] !== undefined) {
+        delete map[tabId];
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    try {
+      await chrome.storage.session.set({ [SESSION_FIRST_SEEN]: map });
+      firstSeenCache = map;
+    } catch (err) {
+      firstSeenCache = null; // next event reloads durable state
+      throw err;
+    }
   });
+  return flushPending;
+}
+
+export function noteTabCreated(tabId: number | undefined): Promise<void> {
+  if (tabId === undefined || enabledCache === false) return Promise.resolve();
+  if (!pendingSeen.has(tabId)) pendingSeen.set(tabId, Date.now());
+  return flushFirstSeen();
 }
 
 export function forgetTab(tabId: number): Promise<void> {
   // Disabled means nothing was ever recorded, so there is nothing to forget.
   if (enabledCache === false) return Promise.resolve();
-  return enqueueFirstSeen(async () => {
-    if (!(await isEnabled())) return;
-    const map = { ...(await readFirstSeen()) };
-    if (map[tabId] !== undefined) {
-      delete map[tabId];
-      try {
-        await chrome.storage.session.set({ [SESSION_FIRST_SEEN]: map });
-        firstSeenCache = map;
-      } catch (err) {
-        firstSeenCache = null; // next event reloads durable state
-        throw err;
-      }
-    }
-  });
+  pendingForget.add(tabId);
+  return flushFirstSeen();
 }
 
 /** Trailing debounce. If the SW dies before it fires, the next tab event or
- * the minute sweep alarm re-arms the check — nothing is lost. */
+ * the sweep alarm re-arms the check — nothing is lost. */
 export function scheduleCheck(): void {
   // Don't hold the service worker awake for a check that would bail anyway.
   if (enabledCache === false) return;

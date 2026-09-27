@@ -13,6 +13,8 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 - Reduced Shelf's background work: closing an ordinary tab no longer scans every open tab, the popup no longer loads every saved session when it opens, and the optional tab-limit check runs every 5 minutes instead of every minute.
 - Made search smoother on large shelves: typing no longer re-scans every saved title from scratch or redraws sessions whose results did not change.
 - Lowered the always-open Shelf tab's memory use: deleted sessions now load only while the Trash page is open.
+- Restoring a session no longer checks every new tab over and over before putting it to sleep; Shelf now waits for Chrome to report that each tab has started loading.
+- With the tab limit on, opening or closing many tabs at once now causes a couple of background writes instead of one per tab.
 - Added performance guardrails: tests that fail when new background listeners or frequent alarms are added, and a release size budget for the extension's scripts.
 
 ## [1.0.0] - 2026-08-18
