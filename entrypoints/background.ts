@@ -129,6 +129,7 @@ export default defineBackground(() => {
           break;
         case ALARM_ORPHAN_GC: {
           await repo.pruneIndex(); // drop dangling index ids (read path no longer prunes)
+          await repo.pruneTrashIndex(); // same for trash (getTrashEntries is read-only)
           const orphans = await repo.collectOrphanGroupKeys();
           await repo.removeKeys(orphans);
           break;

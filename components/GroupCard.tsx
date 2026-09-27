@@ -119,7 +119,7 @@ export const GroupCard = memo(function GroupCard({
           ) : null}
         </>
       ) : null}
-      {!collapsed && !onScreen ? <ul className="tab-rows" style={{ height: tabs.length * ROW_HEIGHT_PX }} /> : null}
+      {!collapsed && !onScreen ? <ul className="tab-rows" style={{ height: mountedTabs.length * ROW_HEIGHT_PX }} /> : null}
     </article>
   );
 });

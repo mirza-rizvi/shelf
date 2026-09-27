@@ -117,6 +117,7 @@ Shelf runs beside every tab the user has open, so its own cost stays small and i
 - **Trash in the pinned tab** — the manager holds only the trash count (from `trashIndex`); full entries load when the Trash page opens and are dropped when it closes.
 - **Restore** — no `tabs.get` polling; `tests/integration/restore.test.ts` asserts zero `tabs.get` calls and that the commit listener is removed afterwards.
 - **Tab limit (when on)** — first-seen bookkeeping coalesces bursts into one `storage.session` write (a 50-tab burst must cost ≤ 2 writes). Alarms are re-created only when missing or when their period changes.
+- **UI reads never write** — `getAllGroups` and `getTrashEntries` filter dangling ids without writing; the weekly `orphan-gc` alarm repairs both indexes (`pruneIndex`, `pruneTrashIndex`). `trashIndex` read-modify-writes are serialized like the group index.
 - **Bundle** — `scripts/verify-release.mjs` fails the release if `background.js` exceeds 40 kB or any page chunk exceeds 60 kB.
 - **Manifest** — the same script pins the permission list and forbids content scripts and host permissions.
 

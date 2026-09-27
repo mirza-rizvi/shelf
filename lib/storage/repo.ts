@@ -274,35 +274,59 @@ export async function setTrashIndex(idx: { order: string[] }): Promise<void> {
   await local().set({ [KEY_TRASH_INDEX]: idx });
 }
 
+/** Serialize trashIndex read-modify-write cycles. onMessage dispatches
+ * concurrently, so two trash writes in flight would otherwise each read the
+ * same index and the later write would drop the earlier entry's id. */
+let trashIndexQueue: Promise<unknown> = Promise.resolve();
+function enqueueTrashIndexWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const next = trashIndexQueue.then(fn, fn);
+  trashIndexQueue = next.catch(() => {});
+  return next;
+}
+
+/** Read-only: filters index ids whose shard is missing, but never writes —
+ * this runs in the manager and popup, where a write would fan a
+ * storage.onChanged event out to every open Shelf page. The orphan-gc alarm
+ * repairs the index via pruneTrashIndex(). */
 export async function getTrashEntries(): Promise<TrashEntry[]> {
   const idx = await getTrashIndex();
   if (idx.order.length === 0) return [];
   const res = await local().get(idx.order.map(trashKey));
   const entries: TrashEntry[] = [];
-  const present: string[] = [];
   for (const id of idx.order) {
     const e = res[trashKey(id)] as TrashEntry | undefined;
-    if (e) {
-      entries.push(e);
-      present.push(id);
-    }
+    if (e) entries.push(e);
   }
-  if (present.length !== idx.order.length) await setTrashIndex({ order: present });
   return entries;
+}
+
+/** GC path: drop trash index ids whose shard no longer exists. */
+export function pruneTrashIndex(): Promise<void> {
+  return enqueueTrashIndexWrite(async () => {
+    const idx = await getTrashIndex();
+    if (idx.order.length === 0) return;
+    const present = new Set(await getAllKeys());
+    const order = idx.order.filter((id) => present.has(trashKey(id)));
+    if (order.length !== idx.order.length) await setTrashIndex({ order });
+  });
 }
 
 export async function putTrashEntry(entry: TrashEntry): Promise<void> {
   await local().set({ [trashKey(entry.id)]: entry });
-  const idx = await getTrashIndex();
-  if (!idx.order.includes(entry.id)) {
-    await setTrashIndex({ order: [entry.id, ...idx.order] });
-  }
+  await enqueueTrashIndexWrite(async () => {
+    const idx = await getTrashIndex();
+    if (!idx.order.includes(entry.id)) {
+      await setTrashIndex({ order: [entry.id, ...idx.order] });
+    }
+  });
 }
 
-export async function deleteTrashEntry(id: string): Promise<void> {
-  const idx = await getTrashIndex();
-  await setTrashIndex({ order: idx.order.filter((t) => t !== id) });
-  await local().remove(trashKey(id));
+export function deleteTrashEntry(id: string): Promise<void> {
+  return enqueueTrashIndexWrite(async () => {
+    const idx = await getTrashIndex();
+    await setTrashIndex({ order: idx.order.filter((t) => t !== id) });
+    await local().remove(trashKey(id));
+  });
 }
 
 // ---------- bulk operations ----------
@@ -361,19 +385,23 @@ export async function getTrashEntry(id: string): Promise<TrashEntry | null> {
 export async function putTrashEntries(entries: readonly TrashEntry[]): Promise<void> {
   if (entries.length === 0) return;
   await local().set(Object.fromEntries(entries.map((e) => [trashKey(e.id), e])));
-  const idx = await getTrashIndex();
-  const fresh = entries.map((e) => e.id).filter((id) => !idx.order.includes(id));
-  if (fresh.length === 0) return;
-  await setTrashIndex({ order: [...[...fresh].reverse(), ...idx.order] });
+  await enqueueTrashIndexWrite(async () => {
+    const idx = await getTrashIndex();
+    const fresh = entries.map((e) => e.id).filter((id) => !idx.order.includes(id));
+    if (fresh.length === 0) return;
+    await setTrashIndex({ order: [...[...fresh].reverse(), ...idx.order] });
+  });
 }
 
 /** Index-first batch delete that preserves every unrelated id and its order. */
-export async function deleteTrashEntries(ids: readonly string[]): Promise<void> {
-  if (ids.length === 0) return;
-  const doomed = new Set(ids);
-  const idx = await getTrashIndex();
-  await setTrashIndex({ order: idx.order.filter((t) => !doomed.has(t)) });
-  await local().remove([...doomed].map(trashKey));
+export function deleteTrashEntries(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return Promise.resolve();
+  return enqueueTrashIndexWrite(async () => {
+    const doomed = new Set(ids);
+    const idx = await getTrashIndex();
+    await setTrashIndex({ order: idx.order.filter((t) => !doomed.has(t)) });
+    await local().remove([...doomed].map(trashKey));
+  });
 }
 
 // ---------- diagnostics ----------

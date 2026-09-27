@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import type { SavedGroup } from '../lib/types';
@@ -127,5 +127,23 @@ describe('GroupCard rendering', () => {
     expect(screen.queryByRole('button', { name: /More actions/ })).toBeNull();
     expect(document.querySelector('.group-card')?.hasAttribute('draggable')).toBe(false);
     expect(document.querySelector('.tab-row')?.hasAttribute('draggable')).toBe(false);
+  });
+});
+
+describe('GroupCard offscreen placeholder', () => {
+  it('sizes the placeholder to the rows it would mount, not every tab', () => {
+    // An observer that never reports an intersection keeps the card offscreen.
+    vi.stubGlobal('IntersectionObserver', class {
+      observe() {}
+      disconnect() {}
+    });
+    try {
+      const urls = Array.from({ length: 420 }, (_, i) => `https://site${i}.example/`);
+      render(<GroupCard group={makeGroup(urls)} />);
+      const placeholder = document.querySelector<HTMLUListElement>('ul.tab-rows')!;
+      expect(placeholder.style.height).toBe(`${300 * 48}px`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
