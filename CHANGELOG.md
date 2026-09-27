@@ -40,5 +40,6 @@ All notable changes to Shelf will be documented here. The project follows [Seman
 - A dependency-free Chrome Web Store release verifier shared by local development and CI.
 - Trusted-context-only local extension storage and documented privacy safeguards.
 
-[Unreleased]: https://github.com/mirza-rizvi/shelf/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/mirza-rizvi/shelf/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/mirza-rizvi/shelf/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mirza-rizvi/shelf/releases/tag/v1.0.0
