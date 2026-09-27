@@ -2,7 +2,7 @@
   "name": "shelf",
   "description": "Privacy-first tab manager. Save tabs to a local list, restore them later. Zero network, zero accounts.",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "type": "module",
   "repository": {

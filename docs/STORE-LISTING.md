@@ -1,4 +1,4 @@
-# Chrome Web Store Listing — Shelf 1.0.0
+# Chrome Web Store Listing — Shelf 1.0.1
 
 This file is the paste-ready source of truth for Shelf's first manual Chrome Web Store submission.
 
@@ -105,7 +105,7 @@ npm ci
 npm run release:check
 ```
 
-Upload `dist/shelf-1.0.0-chrome.zip`. The release verifier checks the manifest, permissions, CSP, assets, bundled code, ZIP layout, and checksum. Chrome requires `manifest.json` at the root of the ZIP.
+Upload `dist/shelf-1.0.1-chrome.zip`. The release verifier checks the manifest, permissions, CSP, assets, bundled code, ZIP layout, and checksum. Chrome requires `manifest.json` at the root of the ZIP.
 
 ## Manual first-submission checklist
 
@@ -113,7 +113,7 @@ Upload `dist/shelf-1.0.0-chrome.zip`. The release verifier checks the manifest, 
 2. Complete the developer profile, verify the contact email, and enable two-step verification.
 3. Run `npm ci` and `npm run release:check` from a clean checkout.
 4. Load `dist/chrome-mv3` unpacked in Chrome 121 or newer and complete `docs/TESTING.md`.
-5. Create a new dashboard item and upload `dist/shelf-1.0.0-chrome.zip`.
+5. Create a new dashboard item and upload `dist/shelf-1.0.1-chrome.zip`.
 6. Paste the listing text, single-purpose statement, permission justifications, data-use answers, and exact URLs from this document.
 7. Upload the icon, three screenshots, and promo tile listed above.
 8. Set distribution to Public, all regions, free, and no in-app purchases.
