@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import type { SavedGroup } from '../../lib/types';
 import * as repo from '../../lib/storage/repo';
@@ -177,5 +177,21 @@ describe('trash service', () => {
     expect(trashed).toHaveLength(1);
     expect(trashed[0]!.kind).toBe('tab');
     expect(trashed[0]!.group.tabs[0]!.id).toBe('gB-dup');
+  });
+});
+
+describe('trash read budget', () => {
+  it('purgeAll empties the trash without reading any trash payloads', async () => {
+    await seed('p1');
+    await seed('p2');
+    await trash.trashGroup('p1');
+    await trash.trashGroup('p2');
+    const get = vi.spyOn(chrome.storage.local, 'get');
+
+    expect(await trash.purgeAll()).toBe(2);
+
+    const readKeys = get.mock.calls.flatMap(([keys]) => (Array.isArray(keys) ? keys : [keys]));
+    expect(readKeys.some((k) => typeof k === 'string' && k.startsWith('trash:'))).toBe(false);
+    expect(await repo.getTrashEntries()).toHaveLength(0);
   });
 });

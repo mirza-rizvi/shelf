@@ -182,3 +182,36 @@ describe('useStorageData', () => {
     await waitFor(() => expect(allSpy).toHaveBeenCalled());
   });
 });
+
+describe('useStorageData trash loading budget', () => {
+  it('reads no trash payloads when trash is not shown, but still counts it', async () => {
+    const entry = { id: 'x1', deletedAt: 1, group: makeGroup('dead', ['https://d.example/']) } as TrashEntry;
+    await chrome.storage.local.set({ 'trash:x1': entry, trashIndex: { order: ['x1'] } });
+    const get = vi.spyOn(chrome.storage.local, 'get');
+
+    const { result, rerender } = renderHook(({ includeTrash }) => useStorageData({ includeTrash }), {
+      initialProps: { includeTrash: false },
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.trashCount).toBe(1));
+    const readKeys = get.mock.calls.flatMap(([keys]) => (Array.isArray(keys) ? keys : [keys]));
+    expect(readKeys.some((k) => typeof k === 'string' && k.startsWith('trash:'))).toBe(false);
+    expect(result.current.trash).toEqual([]);
+
+    rerender({ includeTrash: true });
+    await waitFor(() => expect(result.current.trash.map((t) => t.id)).toEqual(['x1']));
+
+    rerender({ includeTrash: false });
+    await waitFor(() => expect(result.current.trash).toEqual([]));
+    expect(result.current.trashCount).toBe(1);
+  });
+
+  it('keeps the count current from trashIndex writes while trash is hidden', async () => {
+    const { result } = renderHook(() => useStorageData({ includeTrash: false }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const entry = { id: 'x2', deletedAt: 1, group: makeGroup('gone', ['https://g.example/']) } as TrashEntry;
+    await chrome.storage.local.set({ 'trash:x2': entry, trashIndex: { order: ['x2'] } });
+    await waitFor(() => expect(result.current.trashCount).toBe(1));
+    expect(result.current.trash).toEqual([]);
+  });
+});

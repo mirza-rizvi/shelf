@@ -56,6 +56,8 @@ export function TrashPage({ data }: { data: ShelfData }) {
   const toast = useToast();
 
   if (data.loadError) return <LoadError retry={data.refresh} />;
+  // Don't flash "Trash is empty" while entries load on first visit.
+  if (data.trashLoading) return null;
   if (trash.length === 0) {
     return (
       <div className="empty-state">

@@ -176,3 +176,26 @@ describe('repo sharding', () => {
     expect((await repo.getTrashEntriesByIds(['ghost'])).size).toBe(1);
   });
 });
+
+describe('trash index maintenance', () => {
+  const entry = (id: string) => ({ id, deletedAt: 1, kind: 'group' as const, group: makeGroup(`g-${id}`, ['https://t.example/']) });
+
+  it('getTrashEntries filters dangling ids WITHOUT writing (read-only UI path)', async () => {
+    await chrome.storage.local.set({ 'trash:a': entry('a'), trashIndex: { order: ['a', 'ghost'] } });
+    const set = vi.spyOn(chrome.storage.local, 'set');
+
+    expect((await repo.getTrashEntries()).map((e) => e.id)).toEqual(['a']);
+    expect(set).not.toHaveBeenCalled();
+
+    await repo.pruneTrashIndex();
+    expect((await repo.getTrashIndex()).order).toEqual(['a']);
+  });
+
+  it('keeps every id when trash entries are added concurrently', async () => {
+    await Promise.all(Array.from({ length: 10 }, (_, i) => repo.putTrashEntry(entry(`e${i}`))));
+    expect((await repo.getTrashIndex()).order).toHaveLength(10);
+
+    await Promise.all(Array.from({ length: 5 }, (_, i) => repo.deleteTrashEntry(`e${i}`)));
+    expect((await repo.getTrashIndex()).order.sort()).toEqual(['e5', 'e6', 'e7', 'e8', 'e9']);
+  });
+});

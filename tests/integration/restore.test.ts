@@ -28,18 +28,16 @@ let groupSpy: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   fakeBrowser.reset();
   nextTabId = 100;
-  createSpy = vi.fn(async () => ({ id: nextTabId++ }) as chrome.tabs.Tab);
+  // Most tests model a navigation that has already committed by the time
+  // tabs.create resolves; the commit-wait tests below override this.
+  createSpy = vi.fn(async ({ url }: { url: string }) => ({ id: nextTabId++, url }) as chrome.tabs.Tab);
   discardSpy = vi.fn(async (id: number) => ({ id }) as chrome.tabs.Tab);
   groupSpy = vi.fn(async () => 555);
   chrome.tabs.create = createSpy as never;
   chrome.tabs.discard = discardSpy as never;
   chrome.tabs.group = groupSpy as never;
   chrome.tabGroups.update = vi.fn(async () => ({})) as never;
-  // Commit-wait in discardAll polls tabs.get for a non-empty url.
-  chrome.tabs.get = vi.fn(async (id: number) => ({
-    id,
-    url: 'https://committed.example',
-  })) as never;
+  chrome.tabs.get = vi.fn(async (id: number) => ({ id, url: 'https://committed.example' })) as never;
 });
 
 describe('lazy restore (discard-on-restore)', () => {
@@ -96,15 +94,42 @@ describe('lazy restore (discard-on-restore)', () => {
     expect(discardSpy).not.toHaveBeenCalled();
   });
 
-  it('skips the discard when the tab state cannot be read (commit unknown)', async () => {
-    chrome.tabs.get = vi.fn(async () => {
-      throw new Error('No tab with id');
-    }) as never;
-    const result = await restoreGroup(savedGroup([tabItem('a', 'https://a.com')]), {
+});
+
+describe('commit wait without polling', () => {
+  beforeEach(() => {
+    // Real Chrome: a new tab reports url "" until its navigation commits.
+    createSpy.mockImplementation(async () => ({ id: nextTabId++, url: '' }) as chrome.tabs.Tab);
+  });
+
+  it('discards a tab when its commit arrives via tabs.onUpdated, never polling tabs.get', async () => {
+    const pending = restoreGroup(savedGroup([tabItem('a', 'https://a.com'), tabItem('b', 'https://b.com')]), {
       removeAfter: false,
     });
-    expect(result.restored).toBe(1); // restore itself unaffected
-    expect(discardSpy).not.toHaveBeenCalled(); // better loading than blank
+    await vi.waitFor(() => expect(createSpy).toHaveBeenCalledTimes(2));
+    await fakeBrowser.tabs.onUpdated.trigger(100, { url: 'https://a.com' }, { id: 100, url: 'https://a.com' } as never);
+    await fakeBrowser.tabs.onUpdated.trigger(101, { url: 'https://b.com' }, { id: 101, url: 'https://b.com' } as never);
+
+    const result = await pending;
+    expect(result.restored).toBe(2);
+    expect(discardSpy.mock.calls.map((c) => c[0]).sort()).toEqual([100, 101]);
+    expect(chrome.tabs.get).not.toHaveBeenCalled();
+    expect(fakeBrowser.tabs.onUpdated.hasListeners()).toBe(false);
+  });
+
+  it('skips the discard when the commit never arrives (better loading than blank)', async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = restoreGroup(savedGroup([tabItem('a', 'https://a.com')]), { removeAfter: false });
+      await vi.advanceTimersByTimeAsync(2500);
+      const result = await pending;
+      expect(result.restored).toBe(1);
+      expect(discardSpy).not.toHaveBeenCalled();
+      expect(chrome.tabs.get).not.toHaveBeenCalled();
+      expect(fakeBrowser.tabs.onUpdated.hasListeners()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -143,10 +143,10 @@ export async function purgeTrashEntry(entryId: string): Promise<void> {
 
 /** Empty the trash entirely — permanent, confirmed by the UI beforehand. */
 export async function purgeAll(): Promise<number> {
+  // The index already names every entry; no need to load their payloads.
   const idx = await repo.getTrashIndex();
-  const entries = await repo.getTrashEntriesByIds(idx.order);
-  await repo.deleteTrashEntries([...entries.keys()]);
-  return entries.size;
+  await repo.deleteTrashEntries(idx.order);
+  return idx.order.length;
 }
 
 /** Alarm handler: drop entries older than retention. */

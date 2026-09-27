@@ -245,6 +245,18 @@ for (const path of builtFiles) {
   }
 }
 
+// Size budget: the background worker is re-parsed on every wakeup and the
+// manager page stays resident in a pinned tab, so growth here costs Chrome.
+const BACKGROUND_BUDGET_BYTES = 40 * 1024;
+const PAGE_CHUNK_BUDGET_BYTES = 60 * 1024;
+for (const path of builtFiles) {
+  const name = archiveName(path);
+  if (extname(name) !== '.js') continue;
+  const size = statSync(path).size;
+  const budget = name === 'background.js' ? BACKGROUND_BUDGET_BYTES : PAGE_CHUNK_BUDGET_BYTES;
+  check(size <= budget, `${name} is ${(size / 1024).toFixed(1)} kB, over its ${budget / 1024} kB budget`);
+}
+
 const { zip, entries } = readZipEntries(zipPath);
 const seenEntries = new Set();
 for (const entry of entries) {

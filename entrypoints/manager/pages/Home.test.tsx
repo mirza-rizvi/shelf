@@ -16,6 +16,8 @@ const data: ShelfData = {
   }],
   settings: DEFAULT_SETTINGS,
   trash: [],
+  trashCount: 0,
+  trashLoading: false,
   loading: false,
   loadError: false,
   refresh: () => {},

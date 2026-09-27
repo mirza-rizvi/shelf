@@ -94,15 +94,24 @@ export default defineBackground(() => {
     })().catch(() => {});
   });
 
+  /** Create an alarm only if it is missing or has a different period.
+   * Re-creating an existing alarm resets its schedule, so a daily purge
+   * re-asserted on every startup and settings save could keep slipping. */
+  async function ensureAlarm(name: string, periodInMinutes: number): Promise<void> {
+    const existing = await chrome.alarms.get(name);
+    if (existing?.periodInMinutes === periodInMinutes) return;
+    await chrome.alarms.create(name, { periodInMinutes });
+  }
+
   async function ensureAlarms(): Promise<void> {
     const settings = await repo.getSettings();
     // Runs on install, on startup and after every saveSettings — the one place
     // that always has fresh settings, so the tab-limit gate rides along.
     tabLimit.noteEnabled(settings.tabLimit.enabled);
-    await chrome.alarms.create(ALARM_TRASH_PURGE, { periodInMinutes: 24 * 60 });
-    await chrome.alarms.create(ALARM_ORPHAN_GC, { periodInMinutes: 7 * 24 * 60 });
+    await ensureAlarm(ALARM_TRASH_PURGE, 24 * 60);
+    await ensureAlarm(ALARM_ORPHAN_GC, 7 * 24 * 60);
     if (settings.tabLimit.enabled) {
-      await chrome.alarms.create(ALARM_LIMIT_SWEEP, { periodInMinutes: LIMIT_SWEEP_MINUTES });
+      await ensureAlarm(ALARM_LIMIT_SWEEP, LIMIT_SWEEP_MINUTES);
     } else {
       await chrome.alarms.clear(ALARM_LIMIT_SWEEP);
     }
@@ -120,6 +129,7 @@ export default defineBackground(() => {
           break;
         case ALARM_ORPHAN_GC: {
           await repo.pruneIndex(); // drop dangling index ids (read path no longer prunes)
+          await repo.pruneTrashIndex(); // same for trash (getTrashEntries is read-only)
           const orphans = await repo.collectOrphanGroupKeys();
           await repo.removeKeys(orphans);
           break;
@@ -161,11 +171,15 @@ export default defineBackground(() => {
     }, 300);
   }
 
-  chrome.tabs.onRemoved.addListener((_tabId, removeInfo) => {
+  chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
     // A window on its way out (user closed the window, or Shelf was its last
     // tab) must be allowed to die — resurrecting would pin the window open
     // forever. The tab returns with the next window / startup / commit event.
     if (removeInfo.isWindowClosing) return;
+    // Only the anchor's own close needs repair. Every other close would cost
+    // a full tabs.query across all windows, so skip it once the anchor id is
+    // known (a fresh worker has not learned it yet and checks once).
+    if (lastManagerTabId !== null && tabId !== lastManagerTabId) return;
     scheduleEnsureManager();
   });
 

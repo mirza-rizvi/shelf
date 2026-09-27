@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { GroupCard } from '../../../components/GroupCard';
 import { LoadError } from '../../../components/LoadError';
@@ -6,7 +6,7 @@ import { useToast } from '../../../components/Toast';
 import type { ShelfData } from '../../../components/useStorageData';
 import { STORAGE_WARN_BYTES, TRASH_RETENTION_DAYS } from '../../../lib/constants';
 import { sendCmd } from '../../../lib/messaging';
-import { searchGroups } from '../../../lib/search';
+import { filterGroups } from '../../../lib/search';
 import * as repo from '../../../lib/storage/repo';
 
 export function Home({ data }: { data: ShelfData }) {
@@ -36,7 +36,7 @@ export function Home({ data }: { data: ShelfData }) {
       void repo.bytesInUse().then(setBytes).catch(() => {});
     }, 500);
     return () => clearTimeout(id);
-  }, [groups.length, savedTabCount, data.trash.length]);
+  }, [groups.length, savedTabCount, data.trashCount]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -50,15 +50,9 @@ export function Home({ data }: { data: ShelfData }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const results = useMemo(() => {
-    const searchActive = query.trim().length > 0;
-    return searchGroups(groups, query).map(({ group, matchingTabIds }) => ({
-      group,
-      tabs: searchActive && matchingTabIds.size > 0
-        ? group.tabs.filter((tab) => matchingTabIds.has(tab.id))
-        : group.tabs,
-    }));
-  }, [groups, query]);
+  // The input stays responsive while the list catches up with the latest query.
+  const deferredQuery = useDeferredValue(query);
+  const results = useMemo(() => filterGroups(groups, deferredQuery), [groups, deferredQuery]);
 
   const deleteAll = () => {
     if (deletingAll) return;

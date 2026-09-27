@@ -67,7 +67,7 @@ All-window capture creates one session per source window and verifies the full s
 ## MV3 service-worker rules honored
 
 - Every `chrome.*` listener registered synchronously at the SW top level.
-- No load-bearing module state; config re-read from storage inside every handler. (Two deliberate ephemera: the debounce timer — re-armed by the next event or the 60 s sweep alarm if the SW dies — and a duplicate-click guard.)
+- No load-bearing module state; config re-read from storage inside every handler. (Two deliberate ephemera: the debounce timer — re-armed by the next event or the 5-minute sweep alarm if the SW dies — and a duplicate-click guard.)
 - Long-lived scheduling via `chrome.alarms` (trash purge, limit sweep, orphan GC), re-asserted on `onInstalled`/`onStartup`.
 - All mutating operations execute in the background via typed messages, so a closing popup can never abort a save. UI reads storage directly (read-only) and re-renders on `storage.onChanged`.
 
@@ -76,7 +76,7 @@ All-window capture creates one session per source window and verifies the full s
 A pinned `manager.html` tab always exists at the far left — it IS the product surface, OneTab-style. Four trigger paths feed one debounced `ensurePinnedManager()` pass (all in `entrypoints/background.ts`):
 
 1. Lifecycle: `onInstalled`/`onStartup` run the ensure directly.
-2. `tabs.onRemoved` → 300 ms debounced ensure. Skipped entirely when `removeInfo.isWindowClosing` — a dying window must be allowed to die (the tab returns via the other triggers).
+2. `tabs.onRemoved` → 300 ms debounced ensure, only when the removed tab is the tracked anchor (or the anchor id is not yet known in a fresh worker) — ordinary tab closes must not cost a `tabs.query({})` across every window. Skipped entirely when `removeInfo.isWindowClosing` — a dying window must be allowed to die (the tab returns via the other triggers).
 3. `windows.onCreated` → ensure — this is what brings the anchor back after its window closed.
 4. `tabs.onUpdated`: (a) `changeInfo.pinned === false` on the manager → instant re-pin (strict `=== false`, can't self-loop); (b) `changeInfo.url` commit on a manager tab → ensure/dedupe pass (catches Ctrl+Shift+T reopens); (c) the tracked manager tab id navigating AWAY from `manager.html` → ensure (in-place navigation fires no onRemoved).
 
@@ -86,7 +86,7 @@ Capture filters own-origin pages, and the limiter excludes them, so no Shelf fea
 
 ## Tab-limit watcher
 
-`tabs.onCreated/onAttached/onRemoved` → note first-seen (session storage, writes serialized through a promise queue — burst events would otherwise lose entries) → 2 s trailing debounce → `runCheck()`:
+`tabs.onCreated/onAttached/onRemoved` → note first-seen (session storage; events that arrive while a write is queued join it, so a burst costs one or two full-map writes instead of one per tab, and no entry is lost) → 2 s trailing debounce → `runCheck()`:
 grace window 30 s (session-restore storm at startup; also renewed around every restore via `noteBulkOperation()` so a big restore can't evict the user's oldest tabs) → module in-flight guard + timestamp latch (stale >60 s ignored — a SW killed mid-check must not disable the limit) → count **loaded, saveworthy** tabs per window (discarded tabs use minimal memory; blank/New Tab pages have nothing worth saving — neither is counted or evicted) → pure `selectEvictionCandidates()` (oldest first; active/pinned/audible always protected) → auto-save the excess via the same write-verify-close path.
 
 ## Native tab groups
@@ -97,13 +97,29 @@ grace window 30 s (session-restore storm at startup; also renewed around every r
 
 Scheme allowlist (`http`, `https`, `file`, `about`, `chrome`); `javascript:`/`data:`/`vbscript:` are never opened (copy-only in UI). Every `tabs.create` is individually caught; one restricted URL never aborts a batch.
 
-**Lazy restore (group restores only):** restored tabs are `chrome.tabs.discard`ed to minimize memory use until clicked — but only AFTER their navigation commits (poll `tab.url` up to 20×100 ms; on timeout skip the discard — discarding pre-commit blanks the tab). Single-tab restore loads eagerly: the user clicked that tab to read it. Ungrouped tabs discard per creation chunk (bounds the load spike); grouped tabs only after `tabs.group()` runs (discard can replace the tab id), also chunked.
+**Lazy restore (group restores only):** restored tabs are `chrome.tabs.discard`ed to minimize memory use until clicked — but only AFTER their navigation commits (one `tabs.onUpdated` listener per restore, attached before the first `tabs.create`, records each commit; a tab that hasn't committed within 2 s is left loading — discarding pre-commit blanks the tab). Single-tab restore loads eagerly: the user clicked that tab to read it. Ungrouped tabs discard per creation chunk (bounds the load spike); grouped tabs only after `tabs.group()` runs (discard can replace the tab id), also chunked.
 
 ## Migrations
 
 `meta.schemaVersion` gates everything. Fresh installs seed the current version. Upgrades run step-by-step and commit the version only after each transform, so a service-worker stop can safely resume. Newer-than-current data (a downgrade) is left untouched. `repo.ensureReady()` is called defensively from every context, so a missed `onInstalled` cannot strand data.
 
 Schema v4 removed the short-lived workspace and view-preference layers. Its migration strips only workspace references, verifies every live and trashed group by id/tab-count/checksum, and then removes obsolete workspace/batch keys. Older workspace-aware JSON backups remain importable as flat sessions.
+
+## Performance budget
+
+Shelf runs beside every tab the user has open, so its own cost stays small and is guarded by tests:
+
+- **Listeners** — `tests/perf/background-cost.test.ts` allowlists every `chrome.*` event the worker registers. Each listener wakes the service worker, so a new one must be added to the list on purpose.
+- **Alarms** — only `trash-purge`, `orphan-gc` and `limit-sweep`, none more often than every 5 minutes.
+- **Tab closes** — closing an ordinary tab never runs `tabs.query`; only the anchor's own close triggers the repair scan.
+- **Popup** — opening the popup reads settings only; saved sessions load when "More save options" is opened.
+- **Search** — `tests/perf/search.test.ts` keeps a keystroke burst over 2,000 tabs under a generous bound. Lowercased haystacks are cached per group object, the query is deferred with `useDeferredValue`, and an unchanged match set reuses the same tab array so cards stay memoized.
+- **Trash in the pinned tab** — the manager holds only the trash count (from `trashIndex`); full entries load when the Trash page opens and are dropped when it closes.
+- **Restore** — no `tabs.get` polling; `tests/integration/restore.test.ts` asserts zero `tabs.get` calls and that the commit listener is removed afterwards.
+- **Tab limit (when on)** — first-seen bookkeeping coalesces bursts into one `storage.session` write (a 50-tab burst must cost ≤ 2 writes). Alarms are re-created only when missing or when their period changes.
+- **UI reads never write** — `getAllGroups` and `getTrashEntries` filter dangling ids without writing; the weekly `orphan-gc` alarm repairs both indexes (`pruneIndex`, `pruneTrashIndex`). `trashIndex` read-modify-writes are serialized like the group index.
+- **Bundle** — `scripts/verify-release.mjs` fails the release if `background.js` exceeds 40 kB or any page chunk exceeds 60 kB.
+- **Manifest** — the same script pins the permission list and forbids content scripts and host permissions.
 
 ## Dependency justification
 

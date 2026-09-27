@@ -23,7 +23,7 @@ export const LIMIT_DEBOUNCE_MS = 2000;
 /** Ignore tab events for this long after browser startup (session-restore storm). */
 export const STARTUP_GRACE_MS = 30_000;
 /** Periodic belt-and-braces sweep for the tab limit. */
-export const LIMIT_SWEEP_MINUTES = 1;
+export const LIMIT_SWEEP_MINUTES = 5;
 /** Journal entries in phase 'writing' older than this are considered crashed. */
 export const JOURNAL_STALE_MS = 60_000;
 /** Identical save requests within this window are treated as duplicate clicks. */
