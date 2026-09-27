@@ -67,7 +67,7 @@ All-window capture creates one session per source window and verifies the full s
 ## MV3 service-worker rules honored
 
 - Every `chrome.*` listener registered synchronously at the SW top level.
-- No load-bearing module state; config re-read from storage inside every handler. (Two deliberate ephemera: the debounce timer — re-armed by the next event or the 60 s sweep alarm if the SW dies — and a duplicate-click guard.)
+- No load-bearing module state; config re-read from storage inside every handler. (Two deliberate ephemera: the debounce timer — re-armed by the next event or the 5-minute sweep alarm if the SW dies — and a duplicate-click guard.)
 - Long-lived scheduling via `chrome.alarms` (trash purge, limit sweep, orphan GC), re-asserted on `onInstalled`/`onStartup`.
 - All mutating operations execute in the background via typed messages, so a closing popup can never abort a save. UI reads storage directly (read-only) and re-renders on `storage.onChanged`.
 
@@ -104,6 +104,17 @@ Scheme allowlist (`http`, `https`, `file`, `about`, `chrome`); `javascript:`/`da
 `meta.schemaVersion` gates everything. Fresh installs seed the current version. Upgrades run step-by-step and commit the version only after each transform, so a service-worker stop can safely resume. Newer-than-current data (a downgrade) is left untouched. `repo.ensureReady()` is called defensively from every context, so a missed `onInstalled` cannot strand data.
 
 Schema v4 removed the short-lived workspace and view-preference layers. Its migration strips only workspace references, verifies every live and trashed group by id/tab-count/checksum, and then removes obsolete workspace/batch keys. Older workspace-aware JSON backups remain importable as flat sessions.
+
+## Performance budget
+
+Shelf runs beside every tab the user has open, so its own cost stays small and is guarded by tests:
+
+- **Listeners** — `tests/perf/background-cost.test.ts` allowlists every `chrome.*` event the worker registers. Each listener wakes the service worker, so a new one must be added to the list on purpose.
+- **Alarms** — only `trash-purge`, `orphan-gc` and `limit-sweep`, none more often than every 5 minutes.
+- **Tab closes** — closing an ordinary tab never runs `tabs.query`; only the anchor's own close triggers the repair scan.
+- **Popup** — opening the popup reads settings only; saved sessions load when "More save options" is opened.
+- **Bundle** — `scripts/verify-release.mjs` fails the release if `background.js` exceeds 40 kB or any page chunk exceeds 60 kB.
+- **Manifest** — the same script pins the permission list and forbids content scripts and host permissions.
 
 ## Dependency justification
 

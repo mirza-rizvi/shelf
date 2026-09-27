@@ -161,11 +161,15 @@ export default defineBackground(() => {
     }, 300);
   }
 
-  chrome.tabs.onRemoved.addListener((_tabId, removeInfo) => {
+  chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
     // A window on its way out (user closed the window, or Shelf was its last
     // tab) must be allowed to die — resurrecting would pin the window open
     // forever. The tab returns with the next window / startup / commit event.
     if (removeInfo.isWindowClosing) return;
+    // Only the anchor's own close needs repair. Every other close would cost
+    // a full tabs.query across all windows, so skip it once the anchor id is
+    // known (a fresh worker has not learned it yet and checks once).
+    if (lastManagerTabId !== null && tabId !== lastManagerTabId) return;
     scheduleEnsureManager();
   });
 

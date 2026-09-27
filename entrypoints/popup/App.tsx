@@ -29,14 +29,20 @@ function PopupInner() {
 
   useEffect(() => {
     void repo.ensureReady().then(async () => {
-      const [settings, savedGroups] = await Promise.all([
-        repo.getSettings(), repo.getAllGroups(),
-      ]);
+      const settings = await repo.getSettings();
       setCloseOriginals(settings.captureClosesTabs);
       setTabStripLayout(settings.tabStripLayout);
-      setGroups(savedGroups);
     });
   }, []);
+
+  // Session names only feed the collapsed "Add to session" picker, so every
+  // saved tab is read only when the user opens it, not on each popup open.
+  const [groupsRequested, setGroupsRequested] = useState(false);
+  const loadGroups = (open: boolean): void => {
+    if (!open || groupsRequested) return;
+    setGroupsRequested(true);
+    void repo.ensureReady().then(() => repo.getAllGroups()).then(setGroups);
+  };
 
   const save = (scope: CaptureScope) => {
     setBusy(true);
@@ -69,7 +75,7 @@ function PopupInner() {
           </button>
         ))}
       </div>
-      <details className="popup-more">
+      <details className="popup-more" onToggle={(e) => loadGroups(e.currentTarget.open)}>
         <summary>More save options</summary>
         <div className="popup-actions">
           {SAVE_ACTIONS.slice(4).map(({ scope, label }) => (
