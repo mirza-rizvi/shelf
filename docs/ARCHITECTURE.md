@@ -113,6 +113,8 @@ Shelf runs beside every tab the user has open, so its own cost stays small and i
 - **Alarms** — only `trash-purge`, `orphan-gc` and `limit-sweep`, none more often than every 5 minutes.
 - **Tab closes** — closing an ordinary tab never runs `tabs.query`; only the anchor's own close triggers the repair scan.
 - **Popup** — opening the popup reads settings only; saved sessions load when "More save options" is opened.
+- **Search** — `tests/perf/search.test.ts` keeps a keystroke burst over 2,000 tabs under a generous bound. Lowercased haystacks are cached per group object, the query is deferred with `useDeferredValue`, and an unchanged match set reuses the same tab array so cards stay memoized.
+- **Trash in the pinned tab** — the manager holds only the trash count (from `trashIndex`); full entries load when the Trash page opens and are dropped when it closes.
 - **Bundle** — `scripts/verify-release.mjs` fails the release if `background.js` exceeds 40 kB or any page chunk exceeds 60 kB.
 - **Manifest** — the same script pins the permission list and forbids content scripts and host permissions.
 

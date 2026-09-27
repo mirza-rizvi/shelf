@@ -8,7 +8,8 @@ import { TrashPage } from './pages/Trash';
 
 export default function App() {
   const route = useHashRoute();
-  const data = useStorageData();
+  // Full trash entries are only held while the Trash page is showing.
+  const data = useStorageData({ includeTrash: route.path === '/trash' });
 
   // The tab is permanently pinned — a route-aware title is the only way its
   // tooltip/window list reflects where the user is.
@@ -33,7 +34,7 @@ export default function App() {
               Shelves
             </a>
             <a href="#/trash" aria-current={route.path === '/trash' ? 'page' : undefined}>
-              Trash{data.trash.length > 0 ? ` (${data.trash.length})` : ''}
+              Trash{data.trashCount > 0 ? ` (${data.trashCount})` : ''}
             </a>
             <a href="#/settings" aria-current={route.path === '/settings' ? 'page' : undefined}>
               Settings

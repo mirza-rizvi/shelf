@@ -28,7 +28,14 @@ import * as repo from '../lib/storage/repo';
 export interface ShelfData {
   groups: SavedGroup[];
   settings: Settings;
+  /** Full trash entries — only loaded while `includeTrash` is on (the Trash
+   * page); empty otherwise so the pinned manager doesn't hold every deleted
+   * session in memory. */
   trash: TrashEntry[];
+  /** Number of trash entries, always kept current from trashIndex. */
+  trashCount: number;
+  /** True while trash entries are being loaded for the Trash page. */
+  trashLoading: boolean;
   loading: boolean;
   /** Storage read failed — data is intact, the READ failed. UI must show an
    * error + retry, never an empty state (which reads as data loss). */
@@ -46,10 +53,21 @@ const isIgnorableKey = (k: string) => isOpKey(k) || k === KEY_META;
 const isKnownKey = (k: string) =>
   k === KEY_INDEX || k === KEY_SETTINGS || k === KEY_TRASH_INDEX || isGroupKey(k) || isTrashKey(k);
 
-export function useStorageData(): ShelfData {
+export interface StorageDataOptions {
+  /** Load and live-patch full trash entries. Default true. */
+  includeTrash?: boolean;
+}
+
+export function useStorageData({ includeTrash = true }: StorageDataOptions = {}): ShelfData {
   const [groups, setGroups] = useState<SavedGroup[]>([]);
   const [settings, setSettingsState] = useState<Settings | null>(null);
   const [trash, setTrash] = useState<TrashEntry[]>([]);
+  const [trashCount, setTrashCount] = useState(0);
+  const [trashLoading, setTrashLoading] = useState(includeTrash);
+  /** Whether trash entries are held and should be patched incrementally. */
+  const includeTrashRef = useRef(includeTrash);
+  includeTrashRef.current = includeTrash;
+  const trashLoadedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -74,14 +92,25 @@ export function useStorageData(): ShelfData {
   const refresh = useCallback(() => {
     void (async () => {
       await repo.ensureReady();
-      const [g, s, t] = await Promise.all([
+      const withTrash = includeTrashRef.current;
+      const [g, s, t, idx] = await Promise.all([
         repo.getAllGroups(),
         repo.getSettings(),
-        repo.getTrashEntries(),
+        withTrash ? repo.getTrashEntries() : Promise.resolve(null),
+        withTrash ? Promise.resolve(null) : repo.getTrashIndex(),
       ]);
       applyGroups(g);
       setSettingsState(s);
-      applyTrash(t);
+      if (t) {
+        applyTrash(t);
+        setTrashCount(t.length);
+        trashLoadedRef.current = true;
+        setTrashLoading(false);
+      } else {
+        applyTrash([]);
+        setTrashCount(idx?.order.length ?? 0);
+        trashLoadedRef.current = false;
+      }
       setLoadError(false);
       setLoading(false);
       readyRef.current = true;
@@ -197,7 +226,11 @@ export function useStorageData(): ShelfData {
       // than trusting the raw newValue (which predates any new field).
       if (KEY_SETTINGS in changes) setSettingsState(await repo.getSettings());
 
-      if (KEY_TRASH_INDEX in changes || keys.some(isTrashKey)) {
+      if (KEY_TRASH_INDEX in changes) {
+        const order = (changes[KEY_TRASH_INDEX]!.newValue as { order: string[] } | undefined)?.order ?? [];
+        setTrashCount(order.length);
+      }
+      if (trashLoadedRef.current && (KEY_TRASH_INDEX in changes || keys.some(isTrashKey))) {
         if (!(await applyTrashChanges(changes))) refresh();
       }
 
@@ -205,6 +238,31 @@ export function useStorageData(): ShelfData {
     },
     [applyGroupChanges, applyTrashChanges, refresh],
   );
+
+  // Load trash entries when the Trash page opens; drop them when it closes.
+  // The first mount is covered by refresh(), which honors includeTrash.
+  useEffect(() => {
+    if (!readyRef.current) return;
+    if (!includeTrash) {
+      trashLoadedRef.current = false;
+      applyTrash([]);
+      return;
+    }
+    setTrashLoading(true);
+    let cancelled = false;
+    void repo.getTrashEntries().then((entries) => {
+      if (cancelled || !includeTrashRef.current) return;
+      applyTrash(entries);
+      setTrashCount(entries.length);
+      trashLoadedRef.current = true;
+      setTrashLoading(false);
+    }).catch(() => {
+      if (!cancelled) refresh();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [includeTrash, applyTrash, refresh]);
 
   useEffect(() => {
     refresh();
@@ -252,6 +310,8 @@ export function useStorageData(): ShelfData {
     groups,
     settings: settings ?? ({} as Settings),
     trash,
+    trashCount,
+    trashLoading,
     loading: loading || (settings === null && !loadError),
     loadError,
     refresh,
