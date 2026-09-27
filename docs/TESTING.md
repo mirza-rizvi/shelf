@@ -11,18 +11,25 @@
 - `lib/importExport/importJson.test.ts` — round-trip fidelity, legacy-workspace flattening, id regeneration, prototype-pollution immunity, clamps, type confusion, and out-of-range indexes.
 
 ### Components and manager behavior
-- `components/GroupCard.test.tsx` — safe URL rendering, fixed rows, row caps, collapse, and essential restore/delete actions.
-- `components/useStorageData.test.tsx` — initial storage reads and coalesced updates after local-storage changes.
+- `components/GroupCard.test.tsx` — safe URL rendering, fixed rows, row caps, collapse, offscreen placeholder sized to the capped rows, and essential restore/delete actions.
+- `components/useStorageData.test.tsx` — initial storage reads, coalesced updates after local-storage changes, and trash loaded only while the Trash page is shown (count kept from `trashIndex`).
 - `entrypoints/manager/pages/Home.test.tsx` — search-only manager controls, filtering, and `/` focus shortcut.
+- `entrypoints/popup/App.test.tsx` — save-button labels per tab-strip layout; saved sessions read only when “More save options” opens.
 
 ### Integration (fake chrome via `wxt/testing`)
-- `tests/integration/repo.test.ts` — shard round-trip, index ordering, dangling-entry pruning, orphan detection, settings deep-merge.
+- `tests/integration/repo.test.ts` — shard round-trip, index ordering, dangling-entry pruning (read paths never write), orphan detection, settings deep-merge, concurrent trash-index writes.
 - `tests/integration/journal.test.ts` — crash recovery in both phases; never deletes indexed shards; leaves fresh in-flight ops alone.
 - `tests/integration/capture.test.ts` — **the invariant: `tabs.remove` is never called when write verification fails**; tab-group metadata persisted by index; per-tab close failures tolerated.
-- `tests/integration/trash.test.ts` — trash/restore/purge lifecycle; last-tab deletion removes group.
-- `tests/integration/restore.test.ts` — lazy restore (discard after group reconstruction, failures tolerated, missing API tolerated); windowId targeting; blocked-scheme skipping.
-- `tests/integration/tabLimit.test.ts` — over-limit auto-save of oldest excess; protections; disabled + startup-grace no-ops.
+- `tests/integration/trash.test.ts` — trash/restore/purge lifecycle; last-tab deletion removes group; empty-trash reads no payloads.
+- `tests/integration/restore.test.ts` — lazy restore (discard after group reconstruction, failures tolerated, missing API tolerated); commit detected via `tabs.onUpdated` with no `tabs.get` polling, uncommitted tabs left loading; windowId targeting; blocked-scheme skipping.
+- `tests/integration/tabLimit.test.ts` — over-limit auto-save of oldest excess; protections; disabled + startup-grace no-ops; a 50-tab burst costs ≤ 2 session writes.
 - `tests/integration/migrations.test.ts` — fresh seed, idempotence, downgrade refusal, legacy settings cleanup, and verified v3 workspace flattening.
+
+### Performance guardrails (`tests/perf/`)
+- `background-cost.test.ts` — allowlisted `chrome.*` listeners and alarms (none more often than every 5 minutes), no `tabs.query` on ordinary tab closes, no alarm re-creation on startup.
+- `search.test.ts` — keystroke burst over 2,000 tabs within a generous bound; unchanged matches reuse the same tab array.
+
+`scripts/verify-release.mjs` also enforces a bundle budget (`background.js` ≤ 40 kB, page chunks ≤ 60 kB) during `npm run release:check`. See “Performance budget” in `docs/ARCHITECTURE.md`.
 
 ## Manual browser checklist (before each release)
 
@@ -52,6 +59,7 @@ First run `npm run release:check`. Then load: `chrome://extensions` → Develope
 
 ### Scale
 - [ ] Import a 2,000-tab JSON → scroll + search stay usable; Chrome Task Manager memory for the Shelf tab stays modest (offscreen cards use content-visibility).
+- [ ] Restore a 20+ tab group → every tab comes back unloaded, none blank. Check this in regular Chrome: Playwright's Chrome for Testing crashes on `chrome.tabs.discard` on macOS, independent of Shelf.
 
 ### Tab limit
 - [ ] Enable, limit 5 → open a 6th tab → after the ~2 s debounce the oldest non-protected tab is auto-saved to an "Auto-saved" shelf and closed.

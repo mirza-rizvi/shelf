@@ -76,7 +76,7 @@ All-window capture creates one session per source window and verifies the full s
 A pinned `manager.html` tab always exists at the far left — it IS the product surface, OneTab-style. Four trigger paths feed one debounced `ensurePinnedManager()` pass (all in `entrypoints/background.ts`):
 
 1. Lifecycle: `onInstalled`/`onStartup` run the ensure directly.
-2. `tabs.onRemoved` → 300 ms debounced ensure. Skipped entirely when `removeInfo.isWindowClosing` — a dying window must be allowed to die (the tab returns via the other triggers).
+2. `tabs.onRemoved` → 300 ms debounced ensure, only when the removed tab is the tracked anchor (or the anchor id is not yet known in a fresh worker) — ordinary tab closes must not cost a `tabs.query({})` across every window. Skipped entirely when `removeInfo.isWindowClosing` — a dying window must be allowed to die (the tab returns via the other triggers).
 3. `windows.onCreated` → ensure — this is what brings the anchor back after its window closed.
 4. `tabs.onUpdated`: (a) `changeInfo.pinned === false` on the manager → instant re-pin (strict `=== false`, can't self-loop); (b) `changeInfo.url` commit on a manager tab → ensure/dedupe pass (catches Ctrl+Shift+T reopens); (c) the tracked manager tab id navigating AWAY from `manager.html` → ensure (in-place navigation fires no onRemoved).
 
@@ -86,7 +86,7 @@ Capture filters own-origin pages, and the limiter excludes them, so no Shelf fea
 
 ## Tab-limit watcher
 
-`tabs.onCreated/onAttached/onRemoved` → note first-seen (session storage, writes serialized through a promise queue — burst events would otherwise lose entries) → 2 s trailing debounce → `runCheck()`:
+`tabs.onCreated/onAttached/onRemoved` → note first-seen (session storage; events that arrive while a write is queued join it, so a burst costs one or two full-map writes instead of one per tab, and no entry is lost) → 2 s trailing debounce → `runCheck()`:
 grace window 30 s (session-restore storm at startup; also renewed around every restore via `noteBulkOperation()` so a big restore can't evict the user's oldest tabs) → module in-flight guard + timestamp latch (stale >60 s ignored — a SW killed mid-check must not disable the limit) → count **loaded, saveworthy** tabs per window (discarded tabs use minimal memory; blank/New Tab pages have nothing worth saving — neither is counted or evicted) → pure `selectEvictionCandidates()` (oldest first; active/pinned/audible always protected) → auto-save the excess via the same write-verify-close path.
 
 ## Native tab groups

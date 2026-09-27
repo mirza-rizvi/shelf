@@ -1,6 +1,6 @@
 # Shelf Privacy Policy
 
-_Last updated: 2026-08-20. This policy describes Shelf 1.0.0 and is kept with the public source code for verification._
+_Last updated: 2026-09-28. This policy describes Shelf 1.0.1 and is kept with the public source code for verification._
 
 ## Summary
 
